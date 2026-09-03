@@ -5,6 +5,8 @@
 - [ ] `VERSION` is exactly `3.0` for this release.
 - [ ] The primary and legacy loaders both pass the identity test.
 - [ ] The Simplified Chinese loader passes identity and localization tests.
+- [ ] All distributed Python files parse as Python 3.7 syntax for the Maya
+      2022 minimum compatibility target.
 - [ ] Single-weapon and both dual-animation modes pass in Maya 2025.
 - [ ] CAST translator 1.99 or newer is used for integration tests.
 - [ ] User-facing names consistently say Maya Viewmodel Weapon Toolkit.
@@ -16,6 +18,8 @@
 - [ ] License and third-party notices are present.
 - [ ] English and Chinese installation instructions match current behavior.
 - [ ] English and Chinese entry points are documented as mutually exclusive.
+- [ ] Compatibility wording distinguishes the Maya 2022/Python 3 expected
+      minimum from the Maya 2025/Windows verified release environment.
 
 ## GitHub
 

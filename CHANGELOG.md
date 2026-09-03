@@ -17,5 +17,8 @@ All notable changes to this project are documented here.
 - Added output validation and JSON manifests.
 - Added a separately loadable Simplified Chinese UI entry point backed by the
   same implementation and kept the release version at `3.0`.
+- Documented Maya 2022 in Python 3 mode as the minimum compatibility target,
+  while retaining Maya 2025, Python 3.11.4, CAST 1.99, and Windows as the
+  verified release environment.
 
 The version remains 3.0 for the product rename and publication preparation.

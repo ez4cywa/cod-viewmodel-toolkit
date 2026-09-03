@@ -2,9 +2,10 @@
 
 [English](README.md)
 
-Maya Viewmodel Weapon Toolkit 3.0 是面向 Maya 2025 的第一人称武器装配与
-动画工具。它可导入 CAST 手臂和武器模型，支持单武器、同一武器复制双持、
-左右动画合成与替换、安全拖放动画、结构验证及多格式输出。
+Maya Viewmodel Weapon Toolkit 3.0 是面向 Maya 2022 或更高版本、并须以
+Python 3 模式运行的第一人称武器装配与动画工具。它可导入 CAST 手臂和武器
+模型，支持单武器、同一武器复制双持、左右动画合成与替换、安全拖放动画、
+结构验证及多格式输出。本版本已在 Windows 版 Maya 2025 中完成验证。
 
 ## 主要功能
 
@@ -23,7 +24,10 @@ Maya Viewmodel Weapon Toolkit 3.0 是面向 Maya 2025 的第一人称武器装�
 
 ## 运行要求
 
-- Autodesk Maya 2025。
+- Autodesk Maya 2022 或更高版本，并须使用 Python 3 模式。Maya 2022
+  自带的 Python 3.7.7 是最低支持的 Python 运行时。
+- Windows 是目前已验证的操作系统。**打开输出目录** 使用 Windows 专用的
+  `os.startfile`；核心 Maya 工作流尚未在 macOS 或 Linux 上完成认证。
 - [dtzxporter/cast](https://github.com/dtzxporter/cast) 官方 Maya 转换器
   1.99 或更高版本。
 - 骨骼命名符合下文约定的 CAST 文件。
@@ -34,8 +38,7 @@ CAST 转换器是独立的 MIT 开源项目，本仓库不直接捆绑其文件�
 
 1. 按上游说明安装最新 CAST Maya 转换器，并确认 Maya 可以加载
    `castplugin.py`。
-2. 选择一个版本并将相应文件复制到 Maya 2025 的 `MAYA_PLUG_IN_PATH`
-   目录：
+2. 选择一个版本并将相应文件复制到 Maya 的 `MAYA_PLUG_IN_PATH` 目录：
    - 英文版：`viewmodel_weapon_toolkit.py`。
    - 简体中文版：同时复制 `viewmodel_weapon_toolkit.py` 和
      `viewmodel_weapon_toolkit_zh_CN.py`；前者是共享核心。
@@ -86,6 +89,15 @@ CAST 转换器是独立的 MIT 开源项目，本仓库不直接捆绑其文件�
 该孤立轨道，其余动画仍可正常导入。
 
 ## 兼容性
+
+| 支持级别 | 环境 | 状态 |
+| --- | --- | --- |
+| 预期最低版本 | Maya 2022、Python 3.7.7、CAST 1.99+ | 源码语法和所需 Maya API 兼容；尚未在 Maya 2022 中执行基于实际资产的完整回归。 |
+| 发布验证版本 | Maya 2025、Python 3.11.4、CAST 1.99、Windows | 单武器、双持、中文界面和导出的发布验证目标。 |
+
+Windows 或 Linux 版 Maya 2022 也可以用 Python 2 模式启动；本工具包必须在
+Python 3 模式下运行。Maya 2021 及更早版本不受支持。最低版本结论来自代码
+语法与 API 兼容性判断，不代表已在 Maya 2022 中运行完整资产回归。
 
 3.0 保留旧文件名入口、`attachGun` 命令、OptionVar 和双持场景元数据，原有
 场景与 Maya 偏好可以继续使用。

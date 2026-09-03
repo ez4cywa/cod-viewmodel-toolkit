@@ -1,4 +1,7 @@
-r"""Maya Viewmodel Weapon Toolkit plugin for Maya 2025.
+r"""Maya Viewmodel Weapon Toolkit plugin for Maya 2022 and newer.
+
+Python 3 mode is required. The minimum compatibility target is Maya 2022
+with Python 3.7.7; the release is verified on Maya 2025 for Windows.
 
 The plugin imports one viewhands Cast file and one weapon Cast file, then
 parents the weapon's ``j_gun`` under the viewhands' ``tag_weapon`` and zeroes
