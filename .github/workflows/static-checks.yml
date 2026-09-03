@@ -1,0 +1,23 @@
+name: Static checks
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  source:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile Python sources
+        run: python -m py_compile plug-ins/*.py tests/*.py
+      - name: Reject generated assets
+        shell: bash
+        run: |
+          if find . -type f \( -name '*.ma' -o -name '*.mb' -o -name '*.cast' -o -name '*.smd' -o -name '*.fbx' -o -name '*.zip' -o -name '*.bak' \) | grep -q .; then
+            echo 'Generated asset found in repository.'
+            exit 1
+          fi

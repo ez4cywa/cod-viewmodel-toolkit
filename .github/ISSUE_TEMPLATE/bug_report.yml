@@ -1,0 +1,49 @@
+name: Bug report
+description: Report a reproducible Maya Viewmodel Weapon Toolkit problem.
+title: "[Bug]: "
+labels: [bug]
+body:
+  - type: input
+    id: maya-version
+    attributes:
+      label: Maya version
+      placeholder: Maya 2025
+    validations:
+      required: true
+  - type: input
+    id: cast-version
+    attributes:
+      label: CAST plugin version
+      placeholder: 1.99
+    validations:
+      required: true
+  - type: dropdown
+    id: workflow
+    attributes:
+      label: Workflow
+      options:
+        - Single weapon
+        - Dual wield simultaneous
+        - Dual wield sequential
+        - Animation replacement or drag and drop
+        - Export or save
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction steps
+      description: Do not upload proprietary game assets.
+    validations:
+      required: true
+  - type: textarea
+    id: result
+    attributes:
+      label: Expected and actual result
+    validations:
+      required: true
+  - type: textarea
+    id: log
+    attributes:
+      label: Maya Script Editor output
+      render: shell

@@ -1,0 +1,31 @@
+__pycache__/
+*.py[cod]
+*.log
+
+# Maya and DCC outputs
+*.ma
+*.mb
+*.cast
+*.smd
+*.fbx
+*.abc
+
+# Verification manifests and local output trees
+*.json
+verification*/
+output*/
+exports*/
+
+# Archives, backups, and editor state
+*.bak
+*.zip
+*.7z
+*.rar
+*.tmp
+.idea/
+.vscode/
+
+# Operating system metadata
+.DS_Store
+Thumbs.db
+desktop.ini

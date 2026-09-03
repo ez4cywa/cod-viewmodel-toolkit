@@ -1,0 +1,106 @@
+# Maya Viewmodel Weapon Toolkit
+
+[简体中文](README.zh-CN.md)
+
+Maya Viewmodel Weapon Toolkit 3.0 assembles Call of Duty-style CAST
+viewhands and weapon models in Maya 2025. It supports single-weapon setups,
+duplicated-weapon dual wield, collision-safe animation import, validation,
+and independently configured model exports.
+
+## Features
+
+- Attach a weapon's `j_gun` below a viewhands `tag_weapon`.
+- Duplicate one weapon for `tag_weapon_left` and `tag_weapon_right`.
+- Compose left and right akimbo animations on the same frame range.
+- Place the two clips sequentially when side-by-side review is preferable.
+- Replace only the left or right clip in an existing dual-wield scene.
+- Route a dropped pure-animation CAST safely around duplicate joint names.
+- Export versioned Maya ASCII, CAST model, Source SMD, and static FBX files.
+- Choose formats and output folders independently.
+- Write a JSON verification manifest next to every result.
+
+## Requirements
+
+- Autodesk Maya 2025.
+- The official [dtzxporter/cast](https://github.com/dtzxporter/cast)
+  Maya translator, version 1.99 or newer.
+- CAST files whose skeleton names follow the conventions described below.
+
+The CAST translator is a separate MIT-licensed project and is not bundled
+with this repository.
+
+## Installation
+
+1. Install the latest CAST Maya translator following its upstream
+   instructions and verify that Maya can load `castplugin.py`.
+2. Copy `plug-ins/viewmodel_weapon_toolkit.py` into a directory on
+   `MAYA_PLUG_IN_PATH`, such as your Maya 2025 user `plug-ins` directory.
+3. For an upgrade from Attach Gun, copy `plug-ins/attach_gun.py` beside the
+   primary file. The legacy loader preserves existing auto-load preferences.
+4. In Maya's Plug-in Manager, load `viewmodel_weapon_toolkit.py`.
+5. Open the **Viewmodel Weapon Toolkit** menu in Maya's main menu bar.
+
+The plugin registers both `viewmodelWeaponToolkit` and the legacy
+`attachGun` Maya commands. Loading either command opens the single-weapon
+builder.
+
+## Expected skeletons
+
+### Single weapon
+
+- The weapon file supplies `j_gun`.
+- The viewhands file supplies `tag_weapon`.
+- The plugin parents the weapon `j_gun` with `absolute=True`, then sets its
+  local X, Y, and Z translation to zero.
+- Joint transforms are never frozen.
+
+### Dual wield
+
+- The viewhands file supplies `tag_weapon_left` and `tag_weapon_right`.
+- One weapon model is imported twice and receives persistent `akimbo_l_` and
+  `akimbo_r_` joint prefixes.
+- Left animation drives the left hand branch and left weapon; right animation
+  drives the right hand branch and right weapon.
+- In simultaneous mode, shared torso/root tracks use the right clip by
+  default. Sequential mode keeps both complete clips in consecutive ranges.
+
+Dual mode is intentionally for two copies of the same weapon skeleton. It
+does not combine two unrelated or asymmetric weapon rigs.
+
+## Output behavior
+
+Maya ASCII (`.ma`) is the animation-authoritative output. CAST, SMD, and FBX
+are combined/static model exports; they are useful for interchange but should
+not be treated as replacements for the animated Maya scene.
+
+All output formats are optional. Each enabled format can target a different
+folder. Existing files are not overwritten: the toolkit appends a version
+suffix such as `_v001`.
+
+## Known source-data warnings
+
+An animation may contain a `j_gripsafety` track even when the imported model
+does not contain that joint. The toolkit reports and skips that orphan track;
+the remaining animation is still imported.
+
+## Compatibility
+
+The old filename, command, option variables, and dual-scene metadata remain
+supported in 3.0. This allows scenes and preferences created by Attach Gun to
+continue working after the product rename.
+
+## Testing
+
+Run the release identity smoke test with Maya's Python interpreter:
+
+```powershell
+mayapy tests/verify_plugin_identity.py
+```
+
+Full animation tests require suitable CAST assets and are therefore not
+included in the public repository.
+
+## License
+
+This project is released under the MIT License. See [LICENSE](LICENSE) and
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
