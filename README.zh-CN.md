@@ -14,9 +14,12 @@ Maya Viewmodel Weapon Toolkit 3.0 是面向 Maya 2025 的第一人称武器装�
 - 让左右双持动画在同一帧区间同时播放。
 - 提供顺序播放模式，便于前后对比两段完整动画。
 - 在已生成的双持场景中只替换左侧或右侧动画。
+- 即使 CAST 全局启用了 **Import Resets Scene**，工具包管理的动画导入也会
+  保留场景中的已有动画。
 - 安全处理重名关节，拖入纯动画 CAST 时不会错误驱动武器根骨。
 - 可独立选择是否输出 `.ma`、`.cast`、`.smd`、`.fbx`。
 - 每种格式可选择不同输出目录，并自动生成 JSON 验证清单。
+- 发布包同时提供英文版和简体中文版；两个版本复用同一套核心逻辑。
 
 ## 运行要求
 
@@ -31,14 +34,21 @@ CAST 转换器是独立的 MIT 开源项目，本仓库不直接捆绑其文件�
 
 1. 按上游说明安装最新 CAST Maya 转换器，并确认 Maya 可以加载
    `castplugin.py`。
-2. 将 `plug-ins/viewmodel_weapon_toolkit.py` 复制到 Maya 2025 的
-   `MAYA_PLUG_IN_PATH` 目录。
-3. 如果从 Attach Gun 升级，同时复制 `plug-ins/attach_gun.py`。旧入口会
-   保留已有自动加载设置。
-4. 在 Maya 插件管理器中加载 `viewmodel_weapon_toolkit.py`。
-5. 从 Maya 主菜单打开 **Viewmodel Weapon Toolkit**。
+2. 选择一个版本并将相应文件复制到 Maya 2025 的 `MAYA_PLUG_IN_PATH`
+   目录：
+   - 英文版：`viewmodel_weapon_toolkit.py`。
+   - 简体中文版：同时复制 `viewmodel_weapon_toolkit.py` 和
+     `viewmodel_weapon_toolkit_zh_CN.py`；前者是共享核心。
+3. 英文版从 Attach Gun 升级时可以同时复制 `plug-ins/attach_gun.py`。
+   如使用中文版，请在插件管理器中关闭旧 `attach_gun.py` 和英文主入口的
+   自动加载，只启用中文入口。
+4. 英文版在 Maya 插件管理器中加载 `viewmodel_weapon_toolkit.py`；简体
+   中文版加载 `viewmodel_weapon_toolkit_zh_CN.py`。
+5. 从 Maya 主菜单打开 **Viewmodel Weapon Toolkit**（英文版）或
+   **视角模型武器工具包**（中文版）。
 
 插件同时注册新命令 `viewmodelWeaponToolkit` 和兼容命令 `attachGun`。
+英文版、中文版和旧入口注册相同命令，因此只能为其中一个版本启用自动加载。
 
 ## 骨骼约定
 
@@ -82,7 +92,7 @@ CAST 转换器是独立的 MIT 开源项目，本仓库不直接捆绑其文件�
 
 ## 测试
 
-可使用 Maya Python 运行发布入口测试：
+可使用 Maya Python 运行发布入口和中文本地化测试：
 
 ```powershell
 mayapy tests/verify_plugin_identity.py

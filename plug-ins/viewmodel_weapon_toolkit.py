@@ -419,14 +419,15 @@ def _load_castplugin_module():
     global _CAST_BATCH_MODULE
 
     plugin_path = _cast_plugin_path()
-    existing = sys.modules.get("castplugin")
-    existing_path = os.path.abspath(getattr(existing, "__file__", "")) \
-        if existing is not None else ""
-    if (existing is not None and existing_path
-            and os.path.normcase(existing_path)
-            == os.path.normcase(plugin_path)):
-        _CAST_BATCH_MODULE = existing
-        return existing
+    for existing in tuple(sys.modules.values()):
+        existing_path = os.path.abspath(getattr(
+            existing, "__file__", "") or "") if existing is not None else ""
+        if (existing_path and os.path.normcase(existing_path)
+                == os.path.normcase(plugin_path)
+                and hasattr(existing, "sceneSettings")
+                and hasattr(existing, "Cast")):
+            _CAST_BATCH_MODULE = existing
+            return existing
 
     plugin_dir = os.path.dirname(plugin_path)
     if not any(
@@ -489,6 +490,30 @@ def _register_batch_cast_translator(plugin):
 def _castplugin_module():
     ensure_cast_plugin()
     return _load_castplugin_module()
+
+
+def _loaded_castplugin_modules():
+    """Return every loaded Python module instance for the active translator."""
+    ensure_cast_plugin()
+    plugin_path = _cast_plugin_path()
+    modules = []
+    seen = set()
+    for module in tuple(sys.modules.values()):
+        module_path = os.path.abspath(getattr(
+            module, "__file__", "") or "") if module is not None else ""
+        if (not module_path or os.path.normcase(module_path)
+                != os.path.normcase(plugin_path)):
+            continue
+        if not isinstance(getattr(module, "sceneSettings", None), dict):
+            continue
+        identity = id(module)
+        if identity not in seen:
+            seen.add(identity)
+            modules.append(module)
+    primary = _load_castplugin_module()
+    if id(primary) not in seen:
+        modules.append(primary)
+    return modules
 
 
 def cast_translator_name():
@@ -1338,50 +1363,62 @@ def _try_registered_smd_export(path, source_joint, target_joint):
 @contextmanager
 def _temporary_cast_import_settings(options):
     """Disable imported IK/constraints without persisting setting changes."""
-    module = _castplugin_module()
-    settings = getattr(module, "sceneSettings", None)
-    if not isinstance(settings, dict):
+    settings_sets = [
+        module.sceneSettings for module in _loaded_castplugin_modules()
+        if isinstance(getattr(module, "sceneSettings", None), dict)
+    ]
+    if not settings_sets:
         yield
         return
 
-    original = {}
     requested = {
         "importIK": not options.disable_import_ik,
         "importConstraints": not options.disable_import_constraints,
     }
+    originals = []
     try:
-        for name, value in requested.items():
-            if name in settings:
-                original[name] = settings[name]
-                settings[name] = value
+        for settings in settings_sets:
+            original = {}
+            for name, value in requested.items():
+                if name in settings:
+                    original[name] = settings[name]
+                    settings[name] = value
+            originals.append((settings, original))
         yield
     finally:
-        for name, value in original.items():
-            settings[name] = value
+        for settings, original in reversed(originals):
+            for name, value in original.items():
+                settings[name] = value
 
 
 @contextmanager
 def _temporary_cast_export_settings():
     """Export a model-only Cast without changing persistent user settings."""
-    module = _castplugin_module()
-    settings = getattr(module, "sceneSettings", None)
-    if not isinstance(settings, dict):
+    settings_sets = [
+        module.sceneSettings for module in _loaded_castplugin_modules()
+        if isinstance(getattr(module, "sceneSettings", None), dict)
+    ]
+    if not settings_sets:
         raise RuntimeError("Cast plugin sceneSettings are unavailable")
     requested = {
         "exportModel": True,
         "exportAnim": False,
         "bakeKeyframes": False,
     }
-    original = {}
+    originals = []
     try:
-        for name, value in requested.items():
-            if name in settings:
-                original[name] = settings[name]
-                settings[name] = value
+        for settings in settings_sets:
+            original = {}
+            for name, value in requested.items():
+                if name in settings:
+                    original[name] = settings[name]
+                    settings[name] = value
+            originals.append((settings, original))
         yield
     finally:
-        for name, value in original.items():
-            settings[name] = value
+        for settings, original in reversed(originals):
+            for name, value in original.items():
+                settings[name] = value
 
 
 # ---------------------------------------------------------------------------
@@ -1702,9 +1739,11 @@ def _route_dual_animation_names(state, side, selected_hand_names):
 
 @contextmanager
 def _temporary_cast_animation_settings(import_at_time=False):
-    module = _castplugin_module()
-    settings = getattr(module, "sceneSettings", None)
-    if not isinstance(settings, dict):
+    settings_sets = [
+        module.sceneSettings for module in _loaded_castplugin_modules()
+        if isinstance(getattr(module, "sceneSettings", None), dict)
+    ]
+    if not settings_sets:
         yield
         return
     requested = {
@@ -1712,16 +1751,26 @@ def _temporary_cast_animation_settings(import_at_time=False):
         "importReset": False,
         "importLooping": False,
     }
-    original = {}
+    originals = []
     try:
-        for name, value in requested.items():
-            if name in settings:
-                original[name] = settings[name]
-                settings[name] = value
+        for settings in settings_sets:
+            original = {}
+            for name, value in requested.items():
+                if name in settings:
+                    original[name] = settings[name]
+                    settings[name] = value
+            originals.append((settings, original))
         yield
     finally:
-        for name, value in original.items():
-            settings[name] = value
+        for settings, original in reversed(originals):
+            for name, value in original.items():
+                settings[name] = value
+
+
+def _cast_animation_import_options(import_at_time=False):
+    """Pin non-destructive animation behavior on the translator call itself."""
+    return "importAtTime=%d;importReset=0;importLooping=0" % int(
+        bool(import_at_time))
 
 
 def _animation_curves_for_uuids(node_uuids):
@@ -1760,8 +1809,8 @@ def _import_dual_animation_side(
     cmds.currentTime(float(frame_offset), edit=True)
     log("importing %s dual animation at offset %s: %s" % (
         side, frame_offset, animation_path))
-    with _temporary_cast_animation_settings(
-            import_at_time=abs(float(frame_offset)) > 1e-6):
+    import_at_time = abs(float(frame_offset)) > 1e-6
+    with _temporary_cast_animation_settings(import_at_time=import_at_time):
         with _route_dual_animation_names(
                 state, side, selected_hand_names):
             new_nodes = cmds.file(
@@ -1771,6 +1820,7 @@ def _import_dual_animation_side(
                 returnNewNodes=True,
                 ra=True,
                 groupReference=False,
+                options=_cast_animation_import_options(import_at_time),
             ) or []
 
     curves = _animation_curves_for_uuids(routed_uuids)
@@ -3017,16 +3067,18 @@ def import_animation_file(animation_path,
     log("safely importing animation: %s" % animation_path)
     log("routing %s tracks to %s (UUID %s)" % (
         source_joint, hand_node, hand_uuid))
-    with _route_viewhands_animation_name(
-            source_uuid, hand_uuid, source_joint):
-        new_nodes = cmds.file(
-            animation_path,
-            i=True,
-            type=cast_translator_name(),
-            returnNewNodes=True,
-            ra=True,
-            groupReference=False,
-        ) or []
+    with _temporary_cast_animation_settings(import_at_time=False):
+        with _route_viewhands_animation_name(
+                source_uuid, hand_uuid, source_joint):
+            new_nodes = cmds.file(
+                animation_path,
+                i=True,
+                type=cast_translator_name(),
+                returnNewNodes=True,
+                ra=True,
+                groupReference=False,
+                options=_cast_animation_import_options(False),
+            ) or []
 
     if protect_translation:
         source_node = _node_from_uuid(source_uuid)

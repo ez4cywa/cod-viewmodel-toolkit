@@ -1,7 +1,8 @@
-"""Maya smoke test for the primary and legacy plugin entry points."""
+"""Maya smoke test for the English, Chinese, and legacy entry points."""
 
 import os
 import pathlib
+import sys
 
 import maya.cmds as cmds
 
@@ -12,6 +13,7 @@ if not hasattr(cmds, "pluginInfo"):
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 PRIMARY = ROOT / "plug-ins" / "viewmodel_weapon_toolkit.py"
+CHINESE = ROOT / "plug-ins" / "viewmodel_weapon_toolkit_zh_CN.py"
 LEGACY = ROOT / "plug-ins" / "attach_gun.py"
 
 
@@ -33,15 +35,78 @@ def _assert_loaded(path, plugin_name):
         raise RuntimeError("attachGun compatibility command is missing")
 
 
+def _module_from_path(path):
+    for module in tuple(sys.modules.values()):
+        module_path = getattr(module, "__file__", "")
+        if module_path and _same_path(module_path, path):
+            return module
+    raise RuntimeError("Loaded plugin module was not found: %s" % path)
+
+
+class _FakeDialogCommands:
+    def __init__(self):
+        self.keywords = {}
+
+    def confirmDialog(self, **kwargs):
+        self.keywords = kwargs
+        return kwargs["button"][-1]
+
+
 def main():
     cmds.loadPlugin(str(PRIMARY), quiet=True)
     cmds.loadPlugin(str(LEGACY), quiet=True)
     _assert_loaded(PRIMARY, "viewmodel_weapon_toolkit")
     _assert_loaded(LEGACY, "attach_gun")
+    primary_module = _module_from_path(PRIMARY)
+    if primary_module._cast_animation_import_options(False) != \
+            "importAtTime=0;importReset=0;importLooping=0":
+        raise RuntimeError("Static CAST animation options are incorrect")
+    if primary_module._cast_animation_import_options(True) != \
+            "importAtTime=1;importReset=0;importLooping=0":
+        raise RuntimeError("Offset CAST animation options are incorrect")
     cmds.unloadPlugin("attach_gun", force=True)
     if not hasattr(cmds, "viewmodelWeaponToolkit"):
         raise RuntimeError("Unloading the legacy loader removed primary commands")
     cmds.unloadPlugin("viewmodel_weapon_toolkit", force=True)
+
+    cmds.loadPlugin(str(CHINESE), quiet=True)
+    _assert_loaded(CHINESE, "viewmodel_weapon_toolkit_zh_CN")
+    chinese_core = sys.modules.get("viewmodel_weapon_toolkit_zh_cn_core")
+    if chinese_core is None:
+        raise RuntimeError("Chinese shared core module is unavailable")
+    if chinese_core.VERSION != "3.0":
+        raise RuntimeError("Chinese core changed the release version")
+    translator = chinese_core.cmds._commands
+    if translator is not cmds:
+        raise RuntimeError("Chinese UI proxy is not attached to maya.cmds")
+    if chinese_core._zh_cn_entry_version != "3.0":
+        raise RuntimeError("Chinese entry point changed the release version")
+    translate_ui_text = chinese_core._zh_cn_translate_ui_text
+    if translate_ui_text("Dual-Wield Builder...") != \
+            "双持构建器…":
+        raise RuntimeError("Chinese menu translation is unavailable")
+    if translate_ui_text("Failed:\nexample") != \
+            "失败：\nexample":
+        raise RuntimeError("Chinese error translation is unavailable")
+    fake_commands = _FakeDialogCommands()
+    proxy = type(chinese_core.cmds)(fake_commands)
+    response = proxy.confirmDialog(
+        title="Viewmodel Weapon Toolkit - Unsaved Scene",
+        message="Failed:\nexample",
+        button=["Save", "Cancel"],
+        defaultButton="Save",
+        cancelButton="Cancel",
+    )
+    if response != "Cancel":
+        raise RuntimeError("Localized dialog response was not normalized")
+    if fake_commands.keywords["button"] != ["保存", "取消"]:
+        raise RuntimeError("Localized dialog buttons are incorrect")
+    if fake_commands.keywords["title"] != \
+            "视角模型武器工具包 - 未保存场景":
+        raise RuntimeError("Localized dialog title is incorrect")
+    cmds.unloadPlugin("viewmodel_weapon_toolkit_zh_CN", force=True)
+    if hasattr(cmds, "viewmodelWeaponToolkit"):
+        raise RuntimeError("Chinese command survived plugin unload")
 
     cmds.loadPlugin(str(LEGACY), quiet=True)
     _assert_loaded(LEGACY, "attach_gun")

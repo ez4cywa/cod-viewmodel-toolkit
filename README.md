@@ -14,10 +14,14 @@ and independently configured model exports.
 - Compose left and right akimbo animations on the same frame range.
 - Place the two clips sequentially when side-by-side review is preferable.
 - Replace only the left or right clip in an existing dual-wield scene.
+- Preserve existing animation during toolkit-managed CAST imports even when
+  CAST's global **Import Resets Scene** option is enabled.
 - Route a dropped pure-animation CAST safely around duplicate joint names.
 - Export versioned Maya ASCII, CAST model, Source SMD, and static FBX files.
 - Choose formats and output folders independently.
 - Write a JSON verification manifest next to every result.
+- Choose the English entry point or the separately packaged Simplified
+  Chinese UI; both editions use the same core implementation.
 
 ## Requirements
 
@@ -33,16 +37,22 @@ with this repository.
 
 1. Install the latest CAST Maya translator following its upstream
    instructions and verify that Maya can load `castplugin.py`.
-2. Copy `plug-ins/viewmodel_weapon_toolkit.py` into a directory on
-   `MAYA_PLUG_IN_PATH`, such as your Maya 2025 user `plug-ins` directory.
-3. For an upgrade from Attach Gun, copy `plug-ins/attach_gun.py` beside the
-   primary file. The legacy loader preserves existing auto-load preferences.
-4. In Maya's Plug-in Manager, load `viewmodel_weapon_toolkit.py`.
+2. Choose one edition and copy its files into a directory on
+   `MAYA_PLUG_IN_PATH`, such as your Maya 2025 user `plug-ins` directory:
+   - English: `viewmodel_weapon_toolkit.py`.
+   - Simplified Chinese: `viewmodel_weapon_toolkit.py` plus
+     `viewmodel_weapon_toolkit_zh_CN.py` (the first file is the shared core).
+3. For an English upgrade from Attach Gun, copy `plug-ins/attach_gun.py`
+   beside the primary file. To use the Chinese edition, disable auto-load for
+   both the old `attach_gun.py` and the English primary entry instead.
+4. In Maya's Plug-in Manager, load `viewmodel_weapon_toolkit.py` for English,
+   or `viewmodel_weapon_toolkit_zh_CN.py` for Simplified Chinese.
 5. Open the **Viewmodel Weapon Toolkit** menu in Maya's main menu bar.
 
 The plugin registers both `viewmodelWeaponToolkit` and the legacy
 `attachGun` Maya commands. Loading either command opens the single-weapon
-builder.
+builder. The English, Chinese, and legacy entry points register the same
+commands, so enable auto-load for only one edition at a time.
 
 ## Expected skeletons
 
@@ -91,7 +101,8 @@ continue working after the product rename.
 
 ## Testing
 
-Run the release identity smoke test with Maya's Python interpreter:
+Run the release identity and localization smoke test with Maya's Python
+interpreter:
 
 ```powershell
 mayapy tests/verify_plugin_identity.py
