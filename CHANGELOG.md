@@ -20,5 +20,7 @@ All notable changes to this project are documented here.
 - Documented Maya 2022 in Python 3 mode as the minimum compatibility target,
   while retaining Maya 2025, Python 3.11.4, CAST 1.99, and Windows as the
   verified release environment.
+- Bundled a documented project-patched CAST Maya translator based on upstream
+  v1.99, including its unmodified serializer and upstream MIT license.
 
 The version remains 3.0 for the product rename and publication preparation.

@@ -2,7 +2,9 @@
 
 import os
 import pathlib
+import shutil
 import sys
+import tempfile
 
 import maya.cmds as cmds
 
@@ -15,6 +17,8 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 PRIMARY = ROOT / "plug-ins" / "viewmodel_weapon_toolkit.py"
 CHINESE = ROOT / "plug-ins" / "viewmodel_weapon_toolkit_zh_CN.py"
 LEGACY = ROOT / "plug-ins" / "attach_gun.py"
+VENDORED_CAST = ROOT / "third_party" / "cast" / "castplugin.py"
+VENDORED_CAST_MODULE = ROOT / "third_party" / "cast" / "cast.py"
 
 
 def _same_path(left, right):
@@ -35,6 +39,26 @@ def _assert_loaded(path, plugin_name):
         raise RuntimeError("attachGun compatibility command is missing")
 
 
+def _assert_vendored_cast_loaded(expected_path):
+    loaded_path = cmds.pluginInfo("castplugin", query=True, path=True)
+    version = str(cmds.pluginInfo("castplugin", query=True, version=True))
+    translators = cmds.pluginInfo(
+        "castplugin", query=True, translator=True) or []
+    if isinstance(translators, str):
+        translators = [translators]
+    if not _same_path(loaded_path, expected_path):
+        raise RuntimeError("Maya loaded the wrong CAST plugin: %s" % loaded_path)
+    if version != "1.99":
+        raise RuntimeError("Expected bundled CAST 1.99, got %s" % version)
+    if not any(str(name).lower() == "cast" for name in translators):
+        raise RuntimeError("Bundled CAST translator is not registered")
+    cast_module = sys.modules.get("cast")
+    expected_module = pathlib.Path(expected_path).parent / "cast.py"
+    if cast_module is None or not _same_path(
+            getattr(cast_module, "__file__", ""), expected_module):
+        raise RuntimeError("Bundled cast.py was not loaded beside castplugin.py")
+
+
 def _module_from_path(path):
     for module in tuple(sys.modules.values()):
         module_path = getattr(module, "__file__", "")
@@ -53,6 +77,18 @@ class _FakeDialogCommands:
 
 
 def main():
+    if cmds.pluginInfo("castplugin", query=True, loaded=True):
+        cmds.unloadPlugin("castplugin", force=True)
+    sys.modules.pop("castplugin", None)
+    sys.modules.pop("cast", None)
+    runtime_cast_dir = pathlib.Path(tempfile.mkdtemp(
+        prefix="viewmodel_weapon_toolkit_cast_"))
+    runtime_cast = runtime_cast_dir / "castplugin.py"
+    shutil.copy2(str(VENDORED_CAST_MODULE), str(runtime_cast_dir / "cast.py"))
+    shutil.copy2(str(VENDORED_CAST), str(runtime_cast))
+    cmds.loadPlugin(str(runtime_cast), quiet=True)
+    _assert_vendored_cast_loaded(runtime_cast)
+
     cmds.loadPlugin(str(PRIMARY), quiet=True)
     cmds.loadPlugin(str(LEGACY), quiet=True)
     _assert_loaded(PRIMARY, "viewmodel_weapon_toolkit")
@@ -115,6 +151,8 @@ def main():
     if not hasattr(cmds, "viewmodelWeaponToolkit"):
         raise RuntimeError("Primary command did not survive legacy unload")
     cmds.unloadPlugin("viewmodel_weapon_toolkit", force=True)
+    cmds.unloadPlugin("castplugin", force=True)
+    shutil.rmtree(str(runtime_cast_dir))
     print("PLUGIN_IDENTITY_VERIFICATION_OK")
 
 

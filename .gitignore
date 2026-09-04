@@ -1,6 +1,7 @@
 __pycache__/
 *.py[cod]
 *.log
+cast.cfg
 
 # Maya and DCC outputs
 *.ma

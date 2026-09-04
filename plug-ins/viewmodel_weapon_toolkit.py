@@ -19,8 +19,9 @@ asymmetric two-weapon skeletons are outside its scope.
 Output formats and their folders are independently selectable: Maya ASCII
 (``.ma``), combined model Cast (``.cast``), Source model (``.smd``), and FBX
 (``.fbx``). A JSON verification manifest is always written to the common
-output folder. Cast model export requires the official Maya Cast plugin v1.99
-or newer.
+output folder. Release packages include a project-patched Maya Cast plugin
+based on official v1.99; a compatible v1.99 or newer translator can also be
+used.
 
 Load this file through Maya's Plug-in Manager. A ``Viewmodel Weapon Toolkit``
 menu appears in the main menu bar. The legacy ``attach_gun.py`` loader and
