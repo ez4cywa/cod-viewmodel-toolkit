@@ -1,4 +1,4 @@
-"""Legacy loader for Maya Viewmodel Weapon Toolkit 3.0.
+"""Legacy loader for Maya Viewmodel Weapon Toolkit 3.0.1.
 
 Existing Maya installations may continue to auto-load ``attach_gun.py``.
 New installations should load ``viewmodel_weapon_toolkit.py`` instead.

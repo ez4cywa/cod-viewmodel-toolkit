@@ -31,8 +31,8 @@ def _assert_loaded(path, plugin_name):
     version = str(cmds.pluginInfo(plugin_name, query=True, version=True))
     if not _same_path(loaded_path, path):
         raise RuntimeError("Maya loaded the wrong path: %s" % loaded_path)
-    if version != "3.0":
-        raise RuntimeError("Expected version 3.0, got %s" % version)
+    if version != "3.0.1":
+        raise RuntimeError("Expected version 3.0.1, got %s" % version)
     if not hasattr(cmds, "viewmodelWeaponToolkit"):
         raise RuntimeError("viewmodelWeaponToolkit command is missing")
     if not hasattr(cmds, "attachGun"):
@@ -70,10 +70,15 @@ def _module_from_path(path):
 class _FakeDialogCommands:
     def __init__(self):
         self.keywords = {}
+        self.file_dialog_result = ["selected.cast"]
 
     def confirmDialog(self, **kwargs):
         self.keywords = kwargs
         return kwargs["button"][-1]
+
+    def fileDialog2(self, **kwargs):
+        self.keywords = kwargs
+        return self.file_dialog_result
 
 
 def main():
@@ -110,12 +115,12 @@ def main():
     chinese_core = sys.modules.get("viewmodel_weapon_toolkit_zh_cn_core")
     if chinese_core is None:
         raise RuntimeError("Chinese shared core module is unavailable")
-    if chinese_core.VERSION != "3.0":
+    if chinese_core.VERSION != "3.0.1":
         raise RuntimeError("Chinese core changed the release version")
     translator = chinese_core.cmds._commands
     if translator is not cmds:
         raise RuntimeError("Chinese UI proxy is not attached to maya.cmds")
-    if chinese_core._zh_cn_entry_version != "3.0":
+    if chinese_core._zh_cn_entry_version != "3.0.1":
         raise RuntimeError("Chinese entry point changed the release version")
     translate_ui_text = chinese_core._zh_cn_translate_ui_text
     if translate_ui_text("Dual-Wield Builder...") != \
@@ -124,6 +129,10 @@ def main():
     if translate_ui_text("Failed:\nexample") != \
             "失败：\nexample":
         raise RuntimeError("Chinese error translation is unavailable")
+    if translate_ui_text(
+            ".cast/.smd model export uses bundled/compatible Cast v1.99;") != \
+            ".cast/.smd 模型导出使用内置/兼容的 Cast v1.99；":
+        raise RuntimeError("Chinese bundled CAST text is unavailable")
     fake_commands = _FakeDialogCommands()
     proxy = type(chinese_core.cmds)(fake_commands)
     response = proxy.confirmDialog(
@@ -140,6 +149,14 @@ def main():
     if fake_commands.keywords["title"] != \
             "视角模型武器工具包 - 未保存场景":
         raise RuntimeError("Localized dialog title is incorrect")
+    file_dialog_result = proxy.fileDialog2(
+        caption="Select .cast file",
+        okCaption="Select",
+    )
+    if file_dialog_result is not fake_commands.file_dialog_result:
+        raise RuntimeError("Localized file dialog changed its path list")
+    if fake_commands.keywords["caption"] != "选择 .cast 文件":
+        raise RuntimeError("Localized file dialog caption is incorrect")
     cmds.unloadPlugin("viewmodel_weapon_toolkit_zh_CN", force=True)
     if hasattr(cmds, "viewmodelWeaponToolkit"):
         raise RuntimeError("Chinese command survived plugin unload")

@@ -1,9 +1,9 @@
 # Bundled CAST Maya translator
 
 In a source checkout, this directory contains the CAST Maya translator
-distributed with Maya Viewmodel Weapon Toolkit 3.0. Release archives place
-runtime copies of `cast.py` and `castplugin.py` directly in `plug-ins` while
-retaining this license and patch record under `third_party/cast`.
+distributed with Maya Viewmodel Weapon Toolkit 3.0 and later. Release archives
+place runtime copies of `cast.py` and `castplugin.py` directly in `plug-ins`
+while retaining this license and patch record under `third_party/cast`.
 
 ## Upstream baseline
 

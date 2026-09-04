@@ -1,4 +1,4 @@
-"""Simplified Chinese entry point for Maya Viewmodel Weapon Toolkit 3.0.
+"""Simplified Chinese entry point for Maya Viewmodel Weapon Toolkit 3.0.1.
 
 This file reuses the English implementation beside it and localizes Maya UI
 text at the command boundary. Technical identifiers, joint names, file
@@ -17,7 +17,7 @@ import sys
 import maya.cmds as _maya_cmds
 
 
-VERSION = "3.0"
+VERSION = "3.0.1"
 _LOADER_FILE = globals().get("__file__") or sys._getframe().f_code.co_filename
 _CORE_PATH = os.path.join(
     os.path.dirname(os.path.abspath(_LOADER_FILE)),
@@ -173,8 +173,8 @@ _PHRASE_TRANSLATIONS = (
     ("select at least one", "至少选择一种格式"),
     ("blank folder uses Manifest/default", "目录留空时使用清单/默认目录"),
     ("Cast/SMD/FBX are static model outputs", "Cast/SMD/FBX 为静态模型输出"),
-    (".cast/.smd model export requires official Cast v1.99+;",
-     ".cast/.smd 模型导出需要官方 Cast v1.99+；"),
+    (".cast/.smd model export uses bundled/compatible Cast v1.99;",
+     ".cast/.smd 模型导出使用内置/兼容的 Cast v1.99；"),
     (".fbx excludes animation.", ".fbx 不包含动画。"),
     ("Use saved settings and pick one weapon file.",
      "使用已保存设置并选择一个武器文件。"),
@@ -263,7 +263,9 @@ class _LocalizedCmdsProxy:
             for key in self._UI_KEYWORDS.intersection(localized):
                 localized[key] = _translate_value(localized[key])
             result = command(*args, **localized)
-            return response_map.get(result, result)
+            if name == "confirmDialog":
+                return response_map.get(result, result)
+            return result
 
         return localized_command
 

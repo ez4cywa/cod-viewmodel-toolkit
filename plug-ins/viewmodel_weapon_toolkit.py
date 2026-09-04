@@ -77,7 +77,7 @@ COMMAND_NAME = "viewmodelWeaponToolkit"
 LEGACY_COMMAND_NAME = "attachGun"
 WINDOW_NAME = "ViewmodelWeaponToolkitWindow"
 DUAL_WINDOW_NAME = "ViewmodelWeaponToolkitDualWindow"
-VERSION = "3.0"
+VERSION = "3.0.1"
 
 VIEWHANDS_OPTVAR = "attachGun_viewhandsPath"
 OUTPUT_DIR_OPTVAR = "attachGun_outputDir"
@@ -4331,7 +4331,7 @@ def show_dialog():
         EXPORT_FBX_CHECK, "Static model with skinning (.fbx)",
         saved.export_fbx, FBX_OUTPUT_DIR_FIELD, saved.fbx_output_dir)
     cmds.text(
-        label=(".cast/.smd model export requires official Cast v1.99+; "
+        label=(".cast/.smd model export uses bundled/compatible Cast v1.99; "
                ".fbx excludes animation."),
         align="left",
     )

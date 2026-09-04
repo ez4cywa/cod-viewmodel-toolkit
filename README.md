@@ -2,7 +2,7 @@
 
 [简体中文](README.zh-CN.md)
 
-Maya Viewmodel Weapon Toolkit 3.0 assembles Call of Duty-style CAST
+Maya Viewmodel Weapon Toolkit 3.0.1 assembles Call of Duty-style CAST
 viewhands and weapon models in Maya 2022 or newer running in Python 3 mode.
 It supports single-weapon setups, duplicated-weapon dual wield,
 collision-safe animation import, validation, and independently configured
@@ -122,7 +122,7 @@ minimum-version statement is a compatibility assessment, not a claim that
 the complete asset regression suite was executed in Maya 2022.
 
 The old filename, command, option variables, and dual-scene metadata remain
-supported in 3.0. This allows scenes and preferences created by Attach Gun to
+supported in 3.0.1. This allows scenes and preferences created by Attach Gun to
 continue working after the product rename.
 
 ## Testing

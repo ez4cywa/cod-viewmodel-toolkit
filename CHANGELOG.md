@@ -2,6 +2,14 @@
 
 All notable changes to this project are documented here.
 
+## [3.0.1] - 2026-09-04
+
+- Fixed the Simplified Chinese file and folder browsers failing with
+  `unhashable type: 'list'` after a selection.
+- Limited localized return-value mapping to confirmation dialogs, while
+  preserving Maya file-dialog path lists unchanged.
+- Added a Maya regression test for localized file-dialog list results.
+
 ## [3.0] - 2026-09-03
 
 - Renamed the product to Maya Viewmodel Weapon Toolkit.
