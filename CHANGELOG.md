@@ -2,6 +2,14 @@
 
 All notable changes to this project are documented here.
 
+## [3.0.2] - 2026-09-04
+
+- Fixed dual-wield validation rejecting scenes whose rig and animation
+  metadata was complete but whose optional output bookkeeping was absent.
+- Prevented interrupted dual-wield builds from persisting metadata before
+  both weapon sides pass their initial animation and attachment validation.
+- Added Maya regression coverage for incomplete dual-output metadata.
+
 ## [3.0.1] - 2026-09-04
 
 - Fixed the Simplified Chinese file and folder browsers failing with

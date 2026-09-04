@@ -1,5 +1,7 @@
 """Maya smoke test for the English, Chinese, and legacy entry points."""
 
+import contextlib
+import json
 import os
 import pathlib
 import shutil
@@ -31,8 +33,8 @@ def _assert_loaded(path, plugin_name):
     version = str(cmds.pluginInfo(plugin_name, query=True, version=True))
     if not _same_path(loaded_path, path):
         raise RuntimeError("Maya loaded the wrong path: %s" % loaded_path)
-    if version != "3.0.1":
-        raise RuntimeError("Expected version 3.0.1, got %s" % version)
+    if version != "3.0.2":
+        raise RuntimeError("Expected version 3.0.2, got %s" % version)
     if not hasattr(cmds, "viewmodelWeaponToolkit"):
         raise RuntimeError("viewmodelWeaponToolkit command is missing")
     if not hasattr(cmds, "attachGun"):
@@ -65,6 +67,73 @@ def _module_from_path(path):
         if module_path and _same_path(module_path, path):
             return module
     raise RuntimeError("Loaded plugin module was not found: %s" % path)
+
+
+@contextlib.contextmanager
+def _temporary_dual_state(plugin_module, state):
+    node = cmds.createNode("network", name=plugin_module.DUAL_STATE_NODE)
+    cmds.addAttr(node, longName="attachGunDualJson", dataType="string")
+    cmds.setAttr(
+        node + ".attachGunDualJson",
+        json.dumps(state, sort_keys=True),
+        type="string",
+    )
+    try:
+        yield
+    finally:
+        cmds.delete(node)
+
+
+def _assert_incomplete_dual_output_metadata_is_compatible(plugin_module):
+    """Output bookkeeping must not block rig/animation validation."""
+    state = {
+        "schema_version": 1,
+        "animation_mode": "simultaneous",
+        "shared_hands_source": "right",
+        "source_joint": "j_gun",
+        "left_target_joint": "tag_weapon_left",
+        "right_target_joint": "tag_weapon_right",
+        "left_prefix": "left_",
+        "right_prefix": "right_",
+        "hands_joint_uuids": {},
+        "left_weapon_joint_uuids": {},
+        "right_weapon_joint_uuids": {},
+        "left_source_uuid": "left-source",
+        "right_source_uuid": "right-source",
+        "left_target_uuid": "left-target",
+        "right_target_uuid": "right-target",
+        "left_clip_range": [0.0, 30.0],
+        "right_clip_range": [0.0, 30.0],
+        "playback_range": [0.0, 30.0],
+        "framerate": 30.0,
+        "viewhands_path": "hands.cast",
+        "weapon_path": "weapon.cast",
+        "left_animation_path": "left.cast",
+        "right_animation_path": "right.cast",
+        "expected_joint_count": 0,
+        "expected_mesh_count": 0,
+    }
+    with _temporary_dual_state(plugin_module, state):
+        _, loaded = plugin_module._read_dual_state()
+    for key in (
+            "output_scene", "output_cast", "output_smd", "output_fbx",
+            "output_manifest"):
+        if loaded.get(key) != "":
+            raise RuntimeError("Incomplete metadata did not default %s" % key)
+    if loaded.get("requested_outputs") != {
+            "ma": False, "cast": False, "smd": False, "fbx": False}:
+        raise RuntimeError("Incomplete metadata output choices are incorrect")
+
+    invalid_state = dict(state)
+    invalid_state.pop("source_joint")
+    with _temporary_dual_state(plugin_module, invalid_state):
+        try:
+            plugin_module._read_dual_state()
+        except RuntimeError as exc:
+            if str(exc) != "Dual-wield metadata is missing: source_joint":
+                raise
+        else:
+            raise RuntimeError("Missing structural metadata was accepted")
 
 
 class _FakeDialogCommands:
@@ -105,6 +174,7 @@ def main():
     if primary_module._cast_animation_import_options(True) != \
             "importAtTime=1;importReset=0;importLooping=0":
         raise RuntimeError("Offset CAST animation options are incorrect")
+    _assert_incomplete_dual_output_metadata_is_compatible(primary_module)
     cmds.unloadPlugin("attach_gun", force=True)
     if not hasattr(cmds, "viewmodelWeaponToolkit"):
         raise RuntimeError("Unloading the legacy loader removed primary commands")
@@ -115,12 +185,12 @@ def main():
     chinese_core = sys.modules.get("viewmodel_weapon_toolkit_zh_cn_core")
     if chinese_core is None:
         raise RuntimeError("Chinese shared core module is unavailable")
-    if chinese_core.VERSION != "3.0.1":
+    if chinese_core.VERSION != "3.0.2":
         raise RuntimeError("Chinese core changed the release version")
     translator = chinese_core.cmds._commands
     if translator is not cmds:
         raise RuntimeError("Chinese UI proxy is not attached to maya.cmds")
-    if chinese_core._zh_cn_entry_version != "3.0.1":
+    if chinese_core._zh_cn_entry_version != "3.0.2":
         raise RuntimeError("Chinese entry point changed the release version")
     translate_ui_text = chinese_core._zh_cn_translate_ui_text
     if translate_ui_text("Dual-Wield Builder...") != \

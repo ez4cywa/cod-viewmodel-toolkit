@@ -2,7 +2,7 @@
 
 [English](README.md)
 
-Maya Viewmodel Weapon Toolkit 3.0.1 是面向 Maya 2022 或更高版本、并须以
+Maya Viewmodel Weapon Toolkit 3.0.2 是面向 Maya 2022 或更高版本、并须以
 Python 3 模式运行的第一人称武器装配与动画工具。它可导入 CAST 手臂和武器
 模型，支持单武器、同一武器复制双持、左右动画合成与替换、安全拖放动画、
 结构验证及多格式输出。本版本已在 Windows 版 Maya 2025 中完成验证。
@@ -108,7 +108,7 @@ Windows 或 Linux 版 Maya 2022 也可以用 Python 2 模式启动；本工具�
 Python 3 模式下运行。Maya 2021 及更早版本不受支持。最低版本结论来自代码
 语法与 API 兼容性判断，不代表已在 Maya 2022 中运行完整资产回归。
 
-3.0.1 保留旧文件名入口、`attachGun` 命令、OptionVar 和双持场景元数据，原有
+3.0.2 保留旧文件名入口、`attachGun` 命令、OptionVar 和双持场景元数据，原有
 场景与 Maya 偏好可以继续使用。
 
 ## 测试

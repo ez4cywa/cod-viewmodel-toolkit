@@ -77,7 +77,7 @@ COMMAND_NAME = "viewmodelWeaponToolkit"
 LEGACY_COMMAND_NAME = "attachGun"
 WINDOW_NAME = "ViewmodelWeaponToolkitWindow"
 DUAL_WINDOW_NAME = "ViewmodelWeaponToolkitDualWindow"
-VERSION = "3.0.1"
+VERSION = "3.0.2"
 
 VIEWHANDS_OPTVAR = "attachGun_viewhandsPath"
 OUTPUT_DIR_OPTVAR = "attachGun_outputDir"
@@ -2422,17 +2422,26 @@ def _read_dual_state():
         "right_animation_path",
         "expected_joint_count",
         "expected_mesh_count",
-        "output_scene",
-        "output_cast",
-        "output_smd",
-        "output_fbx",
-        "output_manifest",
-        "requested_outputs",
     )
     missing = [name for name in required if name not in state]
     if missing:
         raise RuntimeError(
             "Dual-wield metadata is missing: %s" % ", ".join(missing))
+    # Output bookkeeping was written after the first validation in 3.0/3.0.1.
+    # Recover an interrupted build far enough to report its real rig or
+    # animation problem, while keeping structural metadata strict above.
+    output_keys = {
+        "ma": "output_scene",
+        "cast": "output_cast",
+        "smd": "output_smd",
+        "fbx": "output_fbx",
+    }
+    for state_key in tuple(output_keys.values()) + ("output_manifest",):
+        state.setdefault(state_key, "")
+    state.setdefault("requested_outputs", {
+        output: bool(state[state_key])
+        for output, state_key in output_keys.items()
+    })
     return nodes[0], state
 
 
@@ -2790,8 +2799,6 @@ def attach_dual_wield(
         loop="once",
     )
     cmds.currentTime(playback_range[0], edit=True)
-    state_node = _create_dual_state(state)
-
     left_verification = _validate_dual_side(state, "left")
     right_verification = _validate_dual_side(state, "right")
     result = DualWieldResult(
@@ -2830,7 +2837,7 @@ def attach_dual_wield(
         right_prefix=options.right_prefix,
         left_clip_range=left_clip_range,
         right_clip_range=right_clip_range,
-        dual_state_node=state_node,
+        dual_state_node="",
         translation_protected=True,
         preflight=preflight,
         left_import_report=left_import_report,
@@ -2844,7 +2851,8 @@ def attach_dual_wield(
     state["output_fbx"] = result.output_fbx
     state["output_manifest"] = result.output_manifest
     state["requested_outputs"] = dict(result.requested_outputs)
-    _write_dual_state(state_node, state)
+    state_node = _create_dual_state(state)
+    result.dual_state_node = state_node
     result.dual_verification = validate_dual_wield()
     _write_result_outputs(result, options, allocate=False)
     _LAST_RESULT = result
