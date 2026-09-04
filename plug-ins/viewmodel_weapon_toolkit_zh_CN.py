@@ -1,4 +1,4 @@
-"""Simplified Chinese entry point for Maya Viewmodel Weapon Toolkit 3.0.2.
+"""Simplified Chinese entry point for Maya Viewmodel Weapon Toolkit 3.0.3.
 
 This file reuses the English implementation beside it and localizes Maya UI
 text at the command boundary. Technical identifiers, joint names, file
@@ -17,7 +17,7 @@ import sys
 import maya.cmds as _maya_cmds
 
 
-VERSION = "3.0.2"
+VERSION = "3.0.3"
 _LOADER_FILE = globals().get("__file__") or sys._getframe().f_code.co_filename
 _CORE_PATH = os.path.join(
     os.path.dirname(os.path.abspath(_LOADER_FILE)),
@@ -40,6 +40,7 @@ _EXACT_TRANSLATIONS = {
     "Weapon:": "武器文件：",
     "Left animation:": "左侧动画：",
     "Right animation:": "右侧动画：",
+    "Reference pose (optional):": "参考姿态（可选）：",
     "Manifest/default:": "清单/默认目录：",
     "Weapon root:": "武器根骨：",
     "Weapon joint:": "武器关节：",
@@ -150,6 +151,8 @@ _PHRASE_TRANSLATIONS = (
     ("Right frames:", "右侧帧范围："),
     ("Orphan nodes: none", "孤立节点：无"),
     ("Differing shared tracks:", "存在差异的共享轨道："),
+    ("Reference compensation:", "参考姿态补偿："),
+    ("disabled", "未启用"),
     ("Orphan nodes:", "孤立节点："),
     ("Playback:", "播放范围："),
     ("Joints:", "关节数："),
@@ -164,6 +167,9 @@ _PHRASE_TRANSLATIONS = (
     ("Simultaneous mode splits hand branches and uses the right animation "
      "for shared torso/root tracks.",
      "同时播放模式会拆分左右手分支，共享躯干/根骨轨道采用右侧动画。"),
+    ("Reference pose compensation shifts relative/additive weapon-tag "
+     "translation tracks from the selected reference viewhands rest pose.",
+     "参考姿态补偿会依据所选参考手臂的静止姿态，修正武器挂点的相对/叠加位移轨道。"),
     ("Single mode -", "单武器模式 -"),
     ("Use Dual-Wield Builder for Akimbo scenes.",
      "双持场景请使用双持构建器。"),

@@ -16,6 +16,10 @@ duplicates one weapon, attaches the copies to ``tag_weapon_left`` and
 frames or place them sequentially. It is intended for one duplicated weapon;
 asymmetric two-weapon skeletons are outside its scope.
 
+Dual builds may optionally use a compatible reference-viewhands model to
+compensate relative/additive weapon-tag translation tracks when the active
+viewhands file has a different local rest pose.
+
 Output formats and their folders are independently selectable: Maya ASCII
 (``.ma``), combined model Cast (``.cast``), Source model (``.smd``), and FBX
 (``.fbx``). A JSON verification manifest is always written to the common
@@ -77,7 +81,7 @@ COMMAND_NAME = "viewmodelWeaponToolkit"
 LEGACY_COMMAND_NAME = "attachGun"
 WINDOW_NAME = "ViewmodelWeaponToolkitWindow"
 DUAL_WINDOW_NAME = "ViewmodelWeaponToolkitDualWindow"
-VERSION = "3.0.2"
+VERSION = "3.0.3"
 
 VIEWHANDS_OPTVAR = "attachGun_viewhandsPath"
 OUTPUT_DIR_OPTVAR = "attachGun_outputDir"
@@ -97,6 +101,7 @@ DUAL_VIEWHANDS_OPTVAR = "attachGun_dualViewhandsPath"
 DUAL_WEAPON_OPTVAR = "attachGun_dualWeaponPath"
 DUAL_LEFT_ANIMATION_OPTVAR = "attachGun_dualLeftAnimationPath"
 DUAL_RIGHT_ANIMATION_OPTVAR = "attachGun_dualRightAnimationPath"
+DUAL_REFERENCE_POSE_OPTVAR = "attachGun_dualReferencePosePath"
 DUAL_MODE_OPTVAR = "attachGun_dualAnimationMode"
 
 VIEWHANDS_FIELD = "attachGun_viewhandsField"
@@ -117,6 +122,7 @@ DUAL_VIEWHANDS_FIELD = "attachGun_dualViewhandsField"
 DUAL_WEAPON_FIELD = "attachGun_dualWeaponField"
 DUAL_LEFT_ANIMATION_FIELD = "attachGun_dualLeftAnimationField"
 DUAL_RIGHT_ANIMATION_FIELD = "attachGun_dualRightAnimationField"
+DUAL_REFERENCE_POSE_FIELD = "attachGun_dualReferencePoseField"
 DUAL_MODE_MENU = "attachGun_dualModeMenu"
 DUAL_LEFT_TARGET_FIELD = "attachGun_dualLeftTargetField"
 DUAL_RIGHT_TARGET_FIELD = "attachGun_dualRightTargetField"
@@ -158,6 +164,7 @@ class DualWieldOptions(AttachOptions):
     right_prefix: str = RIGHT_WEAPON_PREFIX
     animation_mode: str = "simultaneous"
     shared_hands_source: str = "right"
+    reference_pose_path: str = ""
 
 
 @dataclass
@@ -222,6 +229,8 @@ class DualWieldResult(AttachResult):
     dual_verification: dict = field(default_factory=dict)
     left_import_report: dict = field(default_factory=dict)
     right_import_report: dict = field(default_factory=dict)
+    reference_pose_path: str = ""
+    reference_pose_compensation: dict = field(default_factory=dict)
 
 
 def log(msg):
@@ -332,6 +341,7 @@ def clear_saved_settings():
             DUAL_WEAPON_OPTVAR,
             DUAL_LEFT_ANIMATION_OPTVAR,
             DUAL_RIGHT_ANIMATION_OPTVAR,
+            DUAL_REFERENCE_POSE_OPTVAR,
             DUAL_MODE_OPTVAR):
         if cmds.optionVar(exists=name):
             cmds.optionVar(remove=name)
@@ -585,14 +595,30 @@ def _cast_bone_inventory(path):
                     bone_name = str(bone.Name())
                     parent_index = int(bone.ParentIndex())
                     parent_name = None
+                    ancestor_names = []
+                    local_position = bone.LocalPosition()
                     if 0 <= parent_index < len(bones):
                         parent_name = str(bones[parent_index].Name())
+                    visited = set()
+                    ancestor_index = parent_index
+                    while (0 <= ancestor_index < len(bones)
+                           and ancestor_index not in visited):
+                        visited.add(ancestor_index)
+                        ancestor = bones[ancestor_index]
+                        ancestor_names.append(str(ancestor.Name()))
+                        ancestor_index = int(ancestor.ParentIndex())
+                    ancestor_names.reverse()
                     bone_names.append(bone_name)
                     bone_records.append({
                         "name": bone_name,
                         "index": bone_index,
                         "parent_index": parent_index,
                         "parent_name": parent_name,
+                        "ancestor_names": ancestor_names,
+                        "local_position": (
+                            [float(value) for value in local_position]
+                            if local_position is not None else None
+                        ),
                     })
 
             for mesh_index, mesh in enumerate(model.Meshes()):
@@ -751,6 +777,16 @@ def _cast_animation_inventory(path):
             % (len(animations), path))
 
     animation = animations[0]
+    curve_mode_overrides = [
+        {
+            "node": str(override.NodeName() or ""),
+            "mode": str(override.Mode() or "absolute"),
+            "translation": bool(override.OverrideTranslationCurves()),
+            "rotation": bool(override.OverrideRotationCurves()),
+            "scale": bool(override.OverrideScaleCurves()),
+        }
+        for override in animation.CurveModeOverrides()
+    ]
     curve_records = []
     all_frames = []
     for curve in animation.Curves():
@@ -774,7 +810,167 @@ def _cast_animation_inventory(path):
         "curve_count": len(curve_records),
         "animated_node_count": len({
             record["node"] for record in curve_records}),
+        "curve_mode_overrides": curve_mode_overrides,
         "curve_records": curve_records,
+    }
+
+
+_TRANSLATION_PROPERTIES = (
+    ("tx", "translateX", 0),
+    ("ty", "translateY", 1),
+    ("tz", "translateZ", 2),
+)
+
+
+def _inventory_bone_record(inventory, joint_name, label):
+    matches = [
+        record for record in inventory.get("bone_records", [])
+        if _short_name(record.get("name", "")) == joint_name
+    ]
+    if len(matches) != 1:
+        raise RuntimeError(
+            "%s must contain exactly one %s rest-pose joint; found %d"
+            % (label, joint_name, len(matches)))
+    record = matches[0]
+    position = record.get("local_position")
+    if position is None or len(position) != 3:
+        raise RuntimeError(
+            "%s joint %s has no local rest position"
+            % (label, joint_name))
+    return record
+
+
+def _effective_translation_curve_mode(
+        curve_record, animation_inventory, ancestor_names):
+    """Resolve CAST translation overrides exactly as the importer does."""
+    mode = str(curve_record.get("mode") or "absolute").lower()
+    for ancestor_name in ancestor_names:
+        for override in animation_inventory.get("curve_mode_overrides", []):
+            if not override.get("translation"):
+                continue
+            if _short_name(override.get("node", "")) == \
+                    _short_name(ancestor_name):
+                return str(override.get("mode") or "absolute").lower()
+    return mode
+
+
+def _reference_pose_side_for_animation(side_data, animation_inventory):
+    """Select rest-offset axes whose animation is relative or additive."""
+    result = dict(side_data)
+    target_joint = result["target_joint"]
+    records_by_property = {}
+    for record in animation_inventory.get("curve_records", []):
+        if _short_name(record.get("node", "")) != target_joint:
+            continue
+        prop = str(record.get("property", "")).lower()
+        if prop not in ("tx", "ty", "tz"):
+            continue
+        if prop in records_by_property:
+            raise RuntimeError(
+                "Animation contains duplicate %s.%s tracks"
+                % (target_joint, prop))
+        records_by_property[prop] = record
+
+    curve_modes = {}
+    attribute_offsets = {}
+    translation_offset = result["translation_offset"]
+    ancestor_names = result.get("ancestor_joints", [])
+    for prop, attribute, index in _TRANSLATION_PROPERTIES:
+        record = records_by_property.get(prop)
+        mode = _effective_translation_curve_mode(
+            record, animation_inventory, ancestor_names) if record else None
+        curve_modes[prop] = mode
+        offset = float(translation_offset[index])
+        if mode in ("relative", "additive") and abs(offset) > 1e-9:
+            attribute_offsets[attribute] = offset
+    result["curve_modes"] = curve_modes
+    result["attribute_offsets"] = attribute_offsets
+    result["applied_attributes"] = sorted(attribute_offsets)
+    return result
+
+
+def _build_reference_pose_compensation(
+        current_inventory,
+        reference_inventory,
+        animation_inventories,
+        left_target_joint,
+        right_target_joint,
+        reference_path=""):
+    """Build per-side local translation offsets from a reference skeleton."""
+    base_sides = {}
+    sides = {}
+    warnings = []
+    for side, target_joint in (
+            ("left", left_target_joint), ("right", right_target_joint)):
+        current = _inventory_bone_record(
+            current_inventory, target_joint, "Viewhands")
+        reference = _inventory_bone_record(
+            reference_inventory, target_joint, "Reference pose")
+        current_parent = _short_name(current.get("parent_name") or "")
+        reference_parent = _short_name(reference.get("parent_name") or "")
+        if current_parent != reference_parent:
+            raise RuntimeError(
+                "Reference pose parent mismatch for %s: %s != %s"
+                % (target_joint, reference_parent or "<root>",
+                   current_parent or "<root>"))
+
+        current_position = [
+            float(value) for value in current["local_position"]]
+        reference_position = [
+            float(value) for value in reference["local_position"]]
+        translation_offset = [
+            reference_position[index] - current_position[index]
+            for index in range(3)
+        ]
+        magnitude = sum(
+            value * value for value in translation_offset) ** 0.5
+        side_data = {
+            "side": side,
+            "target_joint": target_joint,
+            "parent_joint": current_parent,
+            "ancestor_joints": list(current.get("ancestor_names", (
+                [current_parent] if current_parent else []))),
+            "current_rest_translation": current_position,
+            "reference_rest_translation": reference_position,
+            "translation_offset": translation_offset,
+            "translation_offset_magnitude": magnitude,
+        }
+        base_sides[side] = side_data
+        side_data = _reference_pose_side_for_animation(
+            side_data, animation_inventories[side])
+        if magnitude > 1e-6 and not side_data["attribute_offsets"]:
+            warnings.append(
+                "%s reference-pose offset is non-zero, but %s has no "
+                "relative/additive target translation tracks"
+                % (side.title(), target_joint))
+        sides[side] = side_data
+
+    clips = {}
+    for clip_side, animation_inventory in animation_inventories.items():
+        clips[clip_side] = {
+            "targets": {
+                target_side: _reference_pose_side_for_animation(
+                    side_data, animation_inventory)
+                for target_side, side_data in base_sides.items()
+            }
+        }
+
+    return {
+        "enabled": True,
+        "reference_pose_path": reference_path,
+        "sides": sides,
+        "clips": clips,
+        "warnings": warnings,
+    }
+
+
+def _disabled_reference_pose_compensation():
+    return {
+        "enabled": False,
+        "reference_pose_path": "",
+        "sides": {},
+        "clips": {},
+        "warnings": [],
     }
 
 
@@ -829,7 +1025,8 @@ def preflight_dual_inputs(
         animation_mode="simultaneous",
         source_joint=DEFAULT_SOURCE_JOINT,
         left_target_joint=DEFAULT_LEFT_TARGET_JOINT,
-        right_target_joint=DEFAULT_RIGHT_TARGET_JOINT):
+        right_target_joint=DEFAULT_RIGHT_TARGET_JOINT,
+        reference_pose_path=""):
     """Validate a duplicated-weapon Akimbo build without changing the scene."""
     viewhands_path = _validate_cast_path(viewhands_path, "Viewhands")
     weapon_path = _validate_cast_path(weapon_path, "Weapon")
@@ -921,6 +1118,23 @@ def preflight_dual_inputs(
             "are split and shared tracks use the selected master animation"
             % len(conflicting_keys))
 
+    reference_pose = _disabled_reference_pose_compensation()
+    if str(reference_pose_path or "").strip():
+        reference_pose_path = _validate_cast_path(
+            reference_pose_path, "Reference pose")
+        reference_full = _cast_bone_inventory(reference_pose_path)
+        reference_pose = _build_reference_pose_compensation(
+            viewhands_full,
+            reference_full,
+            {"left": left_animation, "right": right_animation},
+            left_target_joint,
+            right_target_joint,
+            reference_path=reference_pose_path,
+        )
+        reference_pose["reference_viewhands"] = public_model_inventory(
+            reference_full)
+        warnings.extend(reference_pose["warnings"])
+
     return {
         "dual_wield": True,
         "same_weapon_duplicated": True,
@@ -935,6 +1149,7 @@ def preflight_dual_inputs(
         "weapon": public_model_inventory(weapon_full),
         "left_animation": _public_animation_inventory(left_animation),
         "right_animation": _public_animation_inventory(right_animation),
+        "reference_pose_compensation": reference_pose,
         "viewhands_side_counts": side_counts,
         "shared_curve_count": len(common_keys),
         "conflicting_shared_curve_count": len(conflicting_keys),
@@ -1794,6 +2009,92 @@ def _curve_time_range(curves):
     return (float(min(key_times)), float(max(key_times)))
 
 
+def _apply_reference_pose_compensation(
+        target_node, side_compensation, frame_range):
+    """Shift imported target translation keys within one clip range."""
+    attribute_offsets = dict(
+        side_compensation.get("attribute_offsets", {}))
+    report = {
+        "enabled": bool(attribute_offsets),
+        "target_node": target_node,
+        "frame_range": [float(frame_range[0]), float(frame_range[1])],
+        "translation_offset": list(
+            side_compensation.get("translation_offset", (0.0, 0.0, 0.0))),
+        "attribute_offsets": attribute_offsets,
+        "applied_curves": [],
+        "applied_curve_count": 0,
+    }
+    for attribute, offset in sorted(attribute_offsets.items()):
+        plug = "%s.%s" % (target_node, attribute)
+        curves = sorted(set(cmds.listConnections(
+            plug,
+            source=True,
+            destination=False,
+            type="animCurve",
+        ) or []))
+        if len(curves) != 1:
+            raise RuntimeError(
+                "Reference-pose compensation expected one animation curve "
+                "on %s; found %d" % (plug, len(curves)))
+        curve = curves[0]
+        key_times = cmds.keyframe(
+            curve,
+            query=True,
+            time=(float(frame_range[0]), float(frame_range[1])),
+            timeChange=True,
+        ) or []
+        if not key_times:
+            raise RuntimeError(
+                "Reference-pose compensation found no keys on %s in %s"
+                % (plug, frame_range))
+        cmds.keyframe(
+            curve,
+            edit=True,
+            relative=True,
+            valueChange=float(offset),
+            time=(float(frame_range[0]), float(frame_range[1])),
+        )
+        report["applied_curves"].append({
+            "attribute": attribute,
+            "curve": curve,
+            "offset": float(offset),
+            "key_count": len(key_times),
+        })
+    report["applied_curve_count"] = len(report["applied_curves"])
+    return report
+
+
+def _apply_clip_reference_pose_compensation(
+        reference_pose, clip_side, target_nodes, frame_range,
+        animation_mode):
+    """Apply one imported clip's correction to its routed target joints."""
+    if not reference_pose.get("enabled"):
+        return {
+            "enabled": False,
+            "clip_side": clip_side,
+            "targets": {},
+            "applied_curve_count": 0,
+        }
+    target_sides = DUAL_SIDES if animation_mode == "sequential" \
+        else (clip_side,)
+    clip = reference_pose.get("clips", {}).get(clip_side, {})
+    compensation_by_target = clip.get("targets", {})
+    reports = {}
+    for target_side in target_sides:
+        reports[target_side] = _apply_reference_pose_compensation(
+            target_nodes[target_side],
+            compensation_by_target.get(target_side, {}),
+            frame_range,
+        )
+    return {
+        "enabled": True,
+        "clip_side": clip_side,
+        "targets": reports,
+        "applied_curve_count": sum(
+            report["applied_curve_count"] for report in reports.values()),
+    }
+
+
 def _import_dual_animation_side(
         state, side, animation_path, selected_hand_names, frame_offset=0.0):
     animation_path = _validate_cast_path(
@@ -2041,26 +2342,26 @@ def _versioned_output_paths(
         % ", ".join(sorted(active_directories)))
 
 
+def _update_output_file_stats(payload, output_paths):
+    """Write consistent path, existence, and size fields for every output."""
+    for name, path in output_paths.items():
+        exists = os.path.isfile(path)
+        payload["output_%s" % name] = path
+        payload["output_%s_exists" % name] = exists
+        payload["output_%s_size" % name] = (
+            os.path.getsize(path) if exists else 0)
+
+
 def _write_manifest(result):
     if not result.output_manifest:
         return
     payload = asdict(result)
-    payload["output_scene_exists"] = os.path.isfile(result.output_scene)
-    payload["output_scene_size"] = (
-        os.path.getsize(result.output_scene)
-        if os.path.isfile(result.output_scene) else 0)
-    payload["output_cast_exists"] = os.path.isfile(result.output_cast)
-    payload["output_cast_size"] = (
-        os.path.getsize(result.output_cast)
-        if os.path.isfile(result.output_cast) else 0)
-    payload["output_smd_exists"] = os.path.isfile(result.output_smd)
-    payload["output_smd_size"] = (
-        os.path.getsize(result.output_smd)
-        if os.path.isfile(result.output_smd) else 0)
-    payload["output_fbx_exists"] = os.path.isfile(result.output_fbx)
-    payload["output_fbx_size"] = (
-        os.path.getsize(result.output_fbx)
-        if os.path.isfile(result.output_fbx) else 0)
+    _update_output_file_stats(payload, {
+        "scene": result.output_scene,
+        "cast": result.output_cast,
+        "smd": result.output_smd,
+        "fbx": result.output_fbx,
+    })
     with open(result.output_manifest, "w", encoding="utf-8") as stream:
         json.dump(payload, stream, ensure_ascii=False, indent=2, sort_keys=True)
 
@@ -2442,6 +2743,10 @@ def _read_dual_state():
         output: bool(state[state_key])
         for output, state_key in output_keys.items()
     })
+    state.setdefault("reference_pose_path", "")
+    state.setdefault(
+        "reference_pose_compensation",
+        _disabled_reference_pose_compensation())
     return nodes[0], state
 
 
@@ -2596,6 +2901,9 @@ def validate_dual_wield():
         "right": right,
         "joint_count": actual_joint_count,
         "mesh_count": actual_mesh_count,
+        "reference_pose_compensation": state.get(
+            "reference_pose_compensation",
+            _disabled_reference_pose_compensation()),
         "warnings": list(state.get("warnings", [])),
     }
 
@@ -2628,6 +2936,8 @@ def attach_dual_wield(
     options.right_target_joint = options.right_target_joint.strip()
     options.left_prefix = options.left_prefix.strip()
     options.right_prefix = options.right_prefix.strip()
+    options.reference_pose_path = str(
+        options.reference_pose_path or "").strip()
     options.output_dir = os.path.normpath(os.path.abspath(
         options.output_dir or DEFAULT_OUTPUT_DIR))
     if options.animation_mode not in DUAL_ANIMATION_MODES:
@@ -2649,6 +2959,7 @@ def attach_dual_wield(
         source_joint=options.source_joint,
         left_target_joint=options.left_target_joint,
         right_target_joint=options.right_target_joint,
+        reference_pose_path=options.reference_pose_path,
     )
     viewhands_path = _validate_cast_path(viewhands_path, "Viewhands")
     weapon_path = _validate_cast_path(weapon_path, "Weapon")
@@ -2656,6 +2967,9 @@ def attach_dual_wield(
         left_animation_path, "Left animation")
     right_animation_path = _validate_cast_path(
         right_animation_path, "Right animation")
+    reference_pose = preflight["reference_pose_compensation"]
+    options.reference_pose_path = reference_pose.get(
+        "reference_pose_path", "")
     if cmds.file(query=True, modified=True) and not options.force_new_scene:
         raise RuntimeError(
             "Current Maya scene has unsaved changes. Save it or explicitly "
@@ -2748,6 +3062,8 @@ def attach_dual_wield(
         "weapon_path": weapon_path,
         "left_animation_path": left_animation_path,
         "right_animation_path": right_animation_path,
+        "reference_pose_path": options.reference_pose_path,
+        "reference_pose_compensation": reference_pose,
         "left_clip_range": left_clip_range,
         "right_clip_range": right_clip_range,
         "playback_range": playback_range,
@@ -2789,6 +3105,26 @@ def attach_dual_wield(
         right_selected,
         right_offset,
     )
+    target_nodes = {
+        "left": _node_from_uuid(left_target_uuid),
+        "right": _node_from_uuid(right_target_uuid),
+    }
+    left_import_report["reference_pose_compensation"] = \
+        _apply_clip_reference_pose_compensation(
+            reference_pose,
+            "left",
+            target_nodes,
+            left_clip_range,
+            options.animation_mode,
+        )
+    right_import_report["reference_pose_compensation"] = \
+        _apply_clip_reference_pose_compensation(
+            reference_pose,
+            "right",
+            target_nodes,
+            right_clip_range,
+            options.animation_mode,
+        )
     state["left_import_report"] = left_import_report
     state["right_import_report"] = right_import_report
     cmds.playbackOptions(
@@ -2842,6 +3178,8 @@ def attach_dual_wield(
         preflight=preflight,
         left_import_report=left_import_report,
         right_import_report=right_import_report,
+        reference_pose_path=options.reference_pose_path,
+        reference_pose_compensation=reference_pose,
         warnings=warnings,
     )
     _allocate_result_output_paths(result, options.output_dir, options)
@@ -2943,6 +3281,30 @@ def replace_dual_animation(side, animation_path):
             selected_hand_names,
             frame_offset,
         )
+        reference_pose = dict(state.get(
+            "reference_pose_compensation",
+            _disabled_reference_pose_compensation()))
+        if reference_pose.get("enabled"):
+            reference_pose["clips"] = dict(reference_pose.get("clips", {}))
+            reference_pose["clips"][side] = {
+                "targets": {
+                    target_side: _reference_pose_side_for_animation(
+                        reference_pose["sides"][target_side], inventory)
+                    for target_side in DUAL_SIDES
+                }
+            }
+        report["reference_pose_compensation"] = \
+            _apply_clip_reference_pose_compensation(
+                reference_pose,
+                side,
+                {
+                    target_side: _node_from_uuid(
+                        state["%s_target_uuid" % target_side])
+                    for target_side in DUAL_SIDES
+                },
+                new_range,
+                state["animation_mode"],
+            )
         state["%s_animation_path" % side] = os.path.normpath(
             os.path.abspath(animation_path))
         state["%s_clip_range" % side] = new_range
@@ -2963,8 +3325,11 @@ def replace_dual_animation(side, animation_path):
             source_joint=state["source_joint"],
             left_target_joint=state["left_target_joint"],
             right_target_joint=state["right_target_joint"],
+            reference_pose_path=state.get("reference_pose_path", ""),
         )
         state["preflight"] = updated_preflight
+        state["reference_pose_compensation"] = updated_preflight[
+            "reference_pose_compensation"]
         state["warnings"] = (
             list(state.get("structural_warnings", [])) +
             list(updated_preflight["warnings"]))
@@ -2984,6 +3349,10 @@ def replace_dual_animation(side, animation_path):
             setattr(_LAST_RESULT, "%s_clip_range" % side, new_range)
             setattr(_LAST_RESULT, "%s_import_report" % side, report)
             _LAST_RESULT.preflight = updated_preflight
+            _LAST_RESULT.reference_pose_path = state.get(
+                "reference_pose_path", "")
+            _LAST_RESULT.reference_pose_compensation = state[
+                "reference_pose_compensation"]
             _LAST_RESULT.warnings = list(state["warnings"])
             _LAST_RESULT.dual_verification = validation
         report = dict(report)
@@ -3364,22 +3733,20 @@ def _refresh_persisted_dual_manifest(state, validation):
         "right_clip_range": list(state["right_clip_range"]),
         "animation_mode": state["animation_mode"],
         "shared_hands_source": state["shared_hands_source"],
+        "reference_pose_path": state.get("reference_pose_path", ""),
+        "reference_pose_compensation": state.get(
+            "reference_pose_compensation",
+            _disabled_reference_pose_compensation()),
         "dual_verification": validation,
         "preflight": state.get("preflight", payload.get("preflight", {})),
         "left_import_report": state.get("left_import_report", {}),
         "right_import_report": state.get("right_import_report", {}),
         "warnings": list(state.get("warnings", [])),
     })
-    for key, state_key in (
-            ("scene", "output_scene"),
-            ("cast", "output_cast"),
-            ("smd", "output_smd"),
-            ("fbx", "output_fbx")):
-        path = state.get(state_key, "")
-        payload["output_%s" % key] = path
-        payload["output_%s_exists" % key] = os.path.isfile(path)
-        payload["output_%s_size" % key] = (
-            os.path.getsize(path) if os.path.isfile(path) else 0)
+    _update_output_file_stats(payload, {
+        key: state.get("output_%s" % key, "")
+        for key in ("scene", "cast", "smd", "fbx")
+    })
     payload["output_manifest"] = manifest_path
     with open(manifest_path, "w", encoding="utf-8") as stream:
         json.dump(payload, stream, ensure_ascii=False, indent=2, sort_keys=True)
@@ -3938,6 +4305,7 @@ def _dual_dialog_options(force_new_scene=False):
         export_fbx=_check_box_value(EXPORT_FBX_CHECK, saved.export_fbx),
         animation_mode=_dual_mode_ui_value(),
         shared_hands_source="right",
+        reference_pose_path=_field_text(DUAL_REFERENCE_POSE_FIELD, ""),
         force_new_scene=force_new_scene,
     )
 
@@ -3955,12 +4323,24 @@ def _dual_dialog_paths():
     return paths
 
 
+def _reference_pose_ui_summary(reference_pose):
+    if not reference_pose.get("enabled"):
+        return "disabled"
+    sides = reference_pose.get("sides", {})
+    return "left %s; right %s" % (
+        sides.get("left", {}).get("translation_offset", []),
+        sides.get("right", {}).get("translation_offset", []),
+    )
+
+
 def _save_dual_dialog_settings(paths, options):
     viewhands, weapon, left_animation, right_animation = paths
     _save_string_option(DUAL_VIEWHANDS_OPTVAR, viewhands)
     _save_string_option(DUAL_WEAPON_OPTVAR, weapon)
     _save_string_option(DUAL_LEFT_ANIMATION_OPTVAR, left_animation)
     _save_string_option(DUAL_RIGHT_ANIMATION_OPTVAR, right_animation)
+    _save_string_option(
+        DUAL_REFERENCE_POSE_OPTVAR, options.reference_pose_path)
     _save_string_option(DUAL_MODE_OPTVAR, options.animation_mode)
     save_options(viewhands, options)
 
@@ -3975,6 +4355,7 @@ def _preflight_dual_from_dialog():
             source_joint=options.source_joint,
             left_target_joint=options.left_target_joint,
             right_target_joint=options.right_target_joint,
+            reference_pose_path=options.reference_pose_path,
         )
         _save_dual_dialog_settings(paths, options)
         cmds.confirmDialog(
@@ -3983,12 +4364,15 @@ def _preflight_dual_from_dialog():
                 "Preflight passed without changing the scene.\n\n"
                 "Mode: %s\nFramerate: %s fps\n"
                 "Left frames: %s\nRight frames: %s\n"
+                "Reference compensation: %s\n"
                 "Differing shared tracks: %d\nOrphan nodes: %s"
                 % (
                     report["animation_mode"],
                     report["left_animation"]["framerate"],
                     report["left_animation"]["frame_range"],
                     report["right_animation"]["frame_range"],
+                    _reference_pose_ui_summary(
+                        report["reference_pose_compensation"]),
                     report["conflicting_shared_curve_count"],
                     ", ".join(report["orphan_curve_nodes"]) or "none",
                 )),
@@ -4013,7 +4397,8 @@ def _run_dual_from_dialog():
             message=(
                 "Dual-wield scene built.\n"
                 "Left: %s -> %s\nRight: %s -> %s\n"
-                "Mode: %s\nLeft frames: %s\nRight frames: %s\n\n"
+                "Mode: %s\nLeft frames: %s\nRight frames: %s\n"
+                "Reference compensation: %s\n\n"
                 "MA: %s\nCast: %s\nSMD: %s\nFBX: %s\nManifest: %s"
                 % (
                     _short_name(result.source_node),
@@ -4023,6 +4408,8 @@ def _run_dual_from_dialog():
                     result.animation_mode,
                     result.left_clip_range,
                     result.right_clip_range,
+                    _reference_pose_ui_summary(
+                        result.reference_pose_compensation),
                     result.output_scene or "disabled",
                     result.output_cast or "disabled",
                     result.output_smd or "disabled",
@@ -4094,7 +4481,7 @@ def show_dual_dialog():
     win = cmds.window(
         DUAL_WINDOW_NAME,
         title="%s v%s - Dual-Wield Builder" % (PRODUCT_SHORT_NAME, VERSION),
-        widthHeight=(880, 650),
+        widthHeight=(880, 690),
         resizeToFitChildren=True,
     )
     cmds.columnLayout(
@@ -4146,6 +4533,17 @@ def show_dual_dialog():
         "Right animation:",
         DUAL_RIGHT_ANIMATION_FIELD,
         _load_string_option(DUAL_RIGHT_ANIMATION_OPTVAR, ""),
+    )
+    add_path_row(
+        "Reference pose (optional):",
+        DUAL_REFERENCE_POSE_FIELD,
+        _load_string_option(DUAL_REFERENCE_POSE_OPTVAR, ""),
+    )
+    cmds.text(
+        label=(
+            "Reference pose compensation shifts relative/additive weapon-tag "
+            "translation tracks from the selected reference viewhands rest pose."),
+        align="left",
     )
     add_path_row(
         "Manifest/default:",

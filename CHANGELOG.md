@@ -2,6 +2,17 @@
 
 All notable changes to this project are documented here.
 
+## [3.0.3] - 2026-09-04
+
+- Added optional reference-viewhands rest-pose compensation for dual-wield
+  target translation tracks.
+- Limited compensation to CAST `relative` and `additive` translation axes;
+  absolute tracks, rotations, weapon roots, and skin binding stay unchanged.
+- Persisted reference paths and per-side offsets for validation and animation
+  replacement while retaining compatibility with older dual-scene metadata.
+- Added English and Simplified Chinese UI controls, documentation, and Maya
+  regression coverage.
+
 ## [3.0.2] - 2026-09-04
 
 - Fixed dual-wield validation rejecting scenes whose rig and animation
@@ -38,5 +49,3 @@ All notable changes to this project are documented here.
   verified release environment.
 - Bundled a documented project-patched CAST Maya translator based on upstream
   v1.99, including its unmodified serializer and upstream MIT license.
-
-The version remains 3.0 for the product rename and publication preparation.

@@ -2,7 +2,7 @@
 
 [简体中文](README.zh-CN.md)
 
-Maya Viewmodel Weapon Toolkit 3.0.2 assembles Call of Duty-style CAST
+Maya Viewmodel Weapon Toolkit 3.0.3 assembles Call of Duty-style CAST
 viewhands and weapon models in Maya 2022 or newer running in Python 3 mode.
 It supports single-weapon setups, duplicated-weapon dual wield,
 collision-safe animation import, validation, and independently configured
@@ -15,6 +15,8 @@ model exports. The release is tested on Maya 2025 for Windows.
 - Compose left and right akimbo animations on the same frame range.
 - Place the two clips sequentially when side-by-side review is preferable.
 - Replace only the left or right clip in an existing dual-wield scene.
+- Optionally compensate relative/additive weapon-tag translation tracks from
+  a compatible reference-viewhands rest pose.
 - Preserve existing animation during toolkit-managed CAST imports even when
   CAST's global **Import Resets Scene** option is enabled.
 - Route a dropped pure-animation CAST safely around duplicate joint names.
@@ -93,6 +95,21 @@ commands, so enable auto-load for only one edition at a time.
 Dual mode is intentionally for two copies of the same weapon skeleton. It
 does not combine two unrelated or asymmetric weapon rigs.
 
+### Optional reference-pose compensation
+
+Some animation CAST files contain `relative` or `additive` translation tracks
+authored against a different viewhands rest pose. If a weapon follows the
+animation but remains displaced from one hand, select the compatible
+viewhands model in **Reference pose (optional)**. The toolkit calculates each
+`tag_weapon_left/right` local rest-translation difference and shifts only the
+affected relative/additive animation curves. Absolute tracks, rotations,
+weapon roots, and skin bind data are unchanged.
+
+Leave the field blank for the previous behavior. The current and reference
+target joints must have the same parent joint name. Compensation values and
+the reference path are saved in the scene metadata and verification manifest,
+and are reused when replacing a dual animation clip.
+
 ## Output behavior
 
 Maya ASCII (`.ma`) is the animation-authoritative output. CAST, SMD, and FBX
@@ -122,7 +139,7 @@ minimum-version statement is a compatibility assessment, not a claim that
 the complete asset regression suite was executed in Maya 2022.
 
 The old filename, command, option variables, and dual-scene metadata remain
-supported in 3.0.2. This allows scenes and preferences created by Attach Gun to
+supported in 3.0.3. This allows scenes and preferences created by Attach Gun to
 continue working after the product rename.
 
 ## Testing
@@ -133,6 +150,7 @@ interpreter:
 ```powershell
 python tests/verify_vendored_cast.py
 mayapy tests/verify_plugin_identity.py
+mayapy tests/verify_reference_pose_compensation.py
 ```
 
 Full animation tests require suitable CAST assets and are therefore not
