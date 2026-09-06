@@ -27,12 +27,17 @@ output folder. Release packages include a project-patched Maya Cast plugin
 based on official v1.99; a compatible v1.99 or newer translator can also be
 used.
 
+Single/dual animation queues export selected animated formats with DQS
+skinning. Animated CAST keeps the assembled rest model, and SMD exports
+skeletal frames only. Each queue item is isolated from previous animation.
+
 Load this file through Maya's Plug-in Manager. A ``Viewmodel Weapon Toolkit``
 menu appears in the main menu bar. The legacy ``attach_gun.py`` loader and
 ``attachGun`` command remain supported for existing installations.
 """
 
 import datetime
+import copy
 import importlib.util
 import json
 import os
@@ -49,6 +54,7 @@ import maya.cmds as cmds
 import maya.OpenMaya as OpenMaya
 import maya.OpenMayaMPx as OpenMayaMPx
 import maya.OpenMayaUI as OpenMayaUI
+import maya.api.OpenMaya as OpenMaya2
 
 
 # ---------------------------------------------------------------------------
@@ -81,7 +87,7 @@ COMMAND_NAME = "viewmodelWeaponToolkit"
 LEGACY_COMMAND_NAME = "attachGun"
 WINDOW_NAME = "ViewmodelWeaponToolkitWindow"
 DUAL_WINDOW_NAME = "ViewmodelWeaponToolkitDualWindow"
-VERSION = "3.0.3"
+VERSION = "3.1.0"
 
 VIEWHANDS_OPTVAR = "attachGun_viewhandsPath"
 OUTPUT_DIR_OPTVAR = "attachGun_outputDir"
@@ -126,11 +132,15 @@ DUAL_REFERENCE_POSE_FIELD = "attachGun_dualReferencePoseField"
 DUAL_MODE_MENU = "attachGun_dualModeMenu"
 DUAL_LEFT_TARGET_FIELD = "attachGun_dualLeftTargetField"
 DUAL_RIGHT_TARGET_FIELD = "attachGun_dualRightTargetField"
+BATCH_ANIMATION_LIST = "attachGun_batchAnimationList"
+BATCH_ANIMATION_PROGRESS = "attachGun_batchAnimationProgress"
+BATCH_ANIMATION_STATUS = "attachGun_batchAnimationStatus"
 
 _LAST_RESULT = None
 _CAST_BATCH_MODULE = None
 _CAST_TRANSLATOR_FALLBACK_REGISTERED = False
 _CAST_DROP_CALLBACK = None
+_TOOLKIT_PLUGIN_PATH = ""
 
 
 @dataclass
@@ -152,6 +162,7 @@ class AttachOptions:
     cast_output_dir: str = ""
     smd_output_dir: str = ""
     fbx_output_dir: str = ""
+    export_animation: bool = False
 
 
 @dataclass
@@ -203,6 +214,12 @@ class AttachResult:
     fbx_verification: dict = field(default_factory=dict)
     requested_outputs: dict = field(default_factory=dict)
     warnings: list = field(default_factory=list)
+    animated_outputs: bool = False
+    frame_range: tuple = ()
+    framerate: float = 0.0
+    animation_verification: dict = field(default_factory=dict)
+    output_errors: dict = field(default_factory=dict)
+    skinning_method: str = ""
 
 
 @dataclass
@@ -398,8 +415,10 @@ def ensure_cast_plugin():
             "%s as a Maya plugin so it can register the official "
             "Cast translator through its batch fallback." % PRODUCT_NAME)
 
+    adjacent = os.path.join(_toolkit_module_dir(), "castplugin.py")
+    candidate = adjacent if os.path.isfile(adjacent) else "castplugin.py"
     try:
-        cmds.loadPlugin("castplugin.py", quiet=True)
+        cmds.loadPlugin(candidate, quiet=True)
     except Exception as exc:
         raise RuntimeError(
             "Maya's bundled castplugin.py failed to load: %s" % exc) from exc
@@ -420,12 +439,24 @@ def _cast_plugin_path():
         if path and os.path.isfile(path):
             return os.path.normpath(os.path.abspath(path))
 
+    adjacent = os.path.join(_toolkit_module_dir(), "castplugin.py")
+    if os.path.isfile(adjacent):
+        return os.path.normpath(os.path.abspath(adjacent))
+
     plugin_dir = os.path.join(
         os.path.dirname(os.path.abspath(sys.executable)), "plug-ins")
     path = os.path.join(plugin_dir, "castplugin.py")
     if os.path.isfile(path):
         return os.path.normpath(os.path.abspath(path))
     raise RuntimeError("Maya Cast plugin file not found: %s" % path)
+
+
+def _toolkit_module_dir():
+    """Resolve this plugin's directory even when Maya omits ``__file__``."""
+    path = _TOOLKIT_PLUGIN_PATH or globals().get("__file__", "")
+    if path:
+        return os.path.dirname(os.path.abspath(path))
+    return ""
 
 
 def _load_castplugin_module():
@@ -759,7 +790,7 @@ def preflight_inputs(viewhands_path, weapon_path,
     }
 
 
-def _cast_animation_inventory(path):
+def _cast_animation_inventory(path, allow_models=False):
     """Read animation tracks without changing the Maya scene."""
     module = _castplugin_module()
     cast_file = module.Cast.load(path)
@@ -768,7 +799,7 @@ def _cast_animation_inventory(path):
     for root in cast_file.Roots():
         model_count += len(root.ChildrenOfType(module.Model))
         animations.extend(root.ChildrenOfType(module.Animation))
-    if model_count:
+    if model_count and not allow_models:
         raise RuntimeError(
             "Animation input must not contain models: %s" % path)
     if len(animations) != 1:
@@ -1160,7 +1191,8 @@ def preflight_dual_inputs(
 
 def verify_exported_cast(path,
                          source_joint=DEFAULT_SOURCE_JOINT,
-                         target_joint=DEFAULT_TARGET_JOINT):
+                         target_joint=DEFAULT_TARGET_JOINT,
+                         allow_animation=False):
     """Re-read an exported Cast and verify model, skeleton, and key joints."""
     path = _validate_cast_path(path, "Exported Cast")
     inventory = _cast_bone_inventory(path)
@@ -1180,7 +1212,7 @@ def verify_exported_cast(path,
         raise RuntimeError("Exported Cast contains no model: %s" % path)
     if inventory["skeleton_count"] < 1:
         raise RuntimeError("Exported Cast contains no skeleton: %s" % path)
-    if inventory["animation_count"]:
+    if inventory["animation_count"] and not allow_animation:
         raise RuntimeError(
             "Exported Cast unexpectedly contains %d animation nodes: %s"
             % (inventory["animation_count"], path))
@@ -1611,8 +1643,8 @@ def _temporary_cast_import_settings(options):
 
 
 @contextmanager
-def _temporary_cast_export_settings():
-    """Export a model-only Cast without changing persistent user settings."""
+def _temporary_cast_export_settings(animation=False, model=True):
+    """Set model/animation export flags without persisting user settings."""
     settings_sets = [
         module.sceneSettings for module in _loaded_castplugin_modules()
         if isinstance(getattr(module, "sceneSettings", None), dict)
@@ -1620,9 +1652,9 @@ def _temporary_cast_export_settings():
     if not settings_sets:
         raise RuntimeError("Cast plugin sceneSettings are unavailable")
     requested = {
-        "exportModel": True,
-        "exportAnim": False,
-        "bakeKeyframes": False,
+        "exportModel": bool(model),
+        "exportAnim": bool(animation),
+        "bakeKeyframes": bool(animation),
     }
     originals = []
     try:
@@ -2003,6 +2035,8 @@ def _animation_curves_for_uuids(node_uuids):
 
 
 def _curve_time_range(curves):
+    if not curves:
+        return ()
     key_times = cmds.keyframe(curves, query=True, timeChange=True) or []
     if not key_times:
         return ()
@@ -2420,9 +2454,16 @@ def _allocate_result_output_paths(result, output_dir, options):
     base_prefix = (
         "dual_attached" if isinstance(result, DualWieldResult)
         else "attached")
+    naming_path = result.weapon_path
+    if result.animated_outputs:
+        base_prefix = "animation"
+        naming_path = result.animation_path
+        if isinstance(result, DualWieldResult):
+            base_prefix = "dual_animation_%s" % result.animation_mode
+            naming_path = result.left_animation_path
     paths = _versioned_output_paths(
         output_dir,
-        result.weapon_path,
+        naming_path,
         options,
         base_prefix=base_prefix,
     )
@@ -2508,6 +2549,8 @@ def _export_result_smd(result):
 
 def _write_result_outputs(result, options, allocate=True):
     """Write every selected output using one shared versioned basename."""
+    if result.animated_outputs:
+        return _write_animation_outputs(result, options, allocate=allocate)
     validate_output_options(options)
     if allocate:
         _allocate_result_output_paths(result, options.output_dir, options)
@@ -2544,8 +2587,8 @@ def _write_result_outputs(result, options, allocate=True):
     _write_manifest(result)
 
 
-def attach_gun(viewhands_path, weapon_path, options=None):
-    """Attach one weapon and write the selected versioned outputs."""
+def _build_single_attachment(viewhands_path, weapon_path, options=None):
+    """Build and validate a clean single-weapon scene, without exporting."""
     global _LAST_RESULT
 
     options = options or AttachOptions()
@@ -2649,8 +2692,14 @@ def attach_gun(viewhands_path, weapon_path, options=None):
         warnings=warnings,
     )
 
-    _write_result_outputs(result, options, allocate=True)
-
+    if options.export_animation:
+        _use_dqs_skinning()
+        result.skinning_method = "dualQuaternion"
+        if options.export_cast:
+            try:
+                result._cast_bind_model = _capture_cast_bind_model()
+            except Exception as exc:
+                result._cast_bind_error = str(exc)
     _LAST_RESULT = result
     log("VERIFY parent=%s" % result.parent_node)
     log("VERIFY translation=%s" % (result.translation,))
@@ -2663,6 +2712,14 @@ def attach_gun(viewhands_path, weapon_path, options=None):
         if path:
             log("OUTPUT %s=%s" % (label, path))
     log("=== %s done ===" % PRODUCT_NAME)
+    return result
+
+
+def attach_gun(viewhands_path, weapon_path, options=None):
+    """Attach one weapon and write the selected versioned outputs."""
+    options = options or AttachOptions()
+    result = _build_single_attachment(viewhands_path, weapon_path, options)
+    _write_result_outputs(result, options, allocate=True)
     return result
 
 
@@ -3019,6 +3076,16 @@ def attach_dual_wield(
     right_source = _node_from_uuid(right_source_uuid)
     _zero_translation(right_source, remove_animation=False)
 
+    cast_bind_model = None
+    cast_bind_error = ""
+    if options.export_animation:
+        _use_dqs_skinning()
+        if options.export_cast:
+            try:
+                cast_bind_model = _capture_cast_bind_model()
+            except Exception as exc:
+                cast_bind_error = str(exc)
+
     left_source_range = preflight["left_animation"]["frame_range"]
     right_source_range = preflight["right_animation"]["frame_range"]
     if options.animation_mode == "simultaneous":
@@ -3180,15 +3247,24 @@ def attach_dual_wield(
         right_import_report=right_import_report,
         reference_pose_path=options.reference_pose_path,
         reference_pose_compensation=reference_pose,
+        animated_outputs=options.export_animation,
+        skinning_method="dualQuaternion" if options.export_animation else "",
+        frame_range=playback_range,
+        framerate=preflight["left_animation"]["framerate"],
         warnings=warnings,
     )
     _allocate_result_output_paths(result, options.output_dir, options)
+    if cast_bind_model is not None:
+        result._cast_bind_model = cast_bind_model
+    if cast_bind_error:
+        result._cast_bind_error = cast_bind_error
     state["output_scene"] = result.output_scene
     state["output_cast"] = result.output_cast
     state["output_smd"] = result.output_smd
     state["output_fbx"] = result.output_fbx
     state["output_manifest"] = result.output_manifest
     state["requested_outputs"] = dict(result.requested_outputs)
+    state["animated_outputs"] = result.animated_outputs
     state_node = _create_dual_state(state)
     result.dual_state_node = state_node
     result.dual_verification = validate_dual_wield()
@@ -3392,6 +3468,427 @@ def batch_attach(viewhands_path, weapon_paths, options=None):
             log("BATCH ERROR %s: %s" % (weapon_path, exc))
             log(traceback.format_exc())
     return successes, errors
+
+
+# ---------------------------------------------------------------------------
+# Animated outputs and single/dual animation queues.
+# ---------------------------------------------------------------------------
+
+def _animation_export_range():
+    values = (
+        float(cmds.playbackOptions(query=True, minTime=True)),
+        float(cmds.playbackOptions(query=True, maxTime=True)),
+    )
+    if values[0] < 0 or values[1] < values[0] or any(
+            value != int(value) for value in values):
+        raise RuntimeError("Animation export requires non-negative whole frames")
+    return tuple(int(value) for value in values)
+
+
+def _use_dqs_skinning():
+    for cluster in cmds.ls(type="skinCluster") or []:
+        cmds.setAttr(cluster + ".skinningMethod", 1)
+
+
+def _capture_cast_bind_model():
+    """Capture the assembled rest model before animation changes skin binding.
+
+    CAST rebinds the exported geometry against the stored skeleton. Exporting
+    a posed mesh would change multi-influence deformation on subsequent frames.
+    Keep this object in memory only, never in the JSON result dataclass.
+    """
+    _require_cast_model_export_version()
+    serializer = sys.modules[_castplugin_module().Cast.__module__]
+    with tempfile.TemporaryDirectory(prefix="vwt_bind_model_") as directory:
+        path = os.path.join(directory, "bind.cast")
+        with _temporary_cast_export_settings():
+            cmds.file(path, force=True, type=cast_translator_name(), exportAll=True,
+                      options="exportModel=1;exportAnim=0;bakeKeyframes=0")
+        model_cast = serializer.Cast.load(path)
+
+        def absolutize_files(node):
+            for child in node.childNodes:
+                if isinstance(child, serializer.File):
+                    value = child.Path()
+                    if value and not os.path.isabs(value):
+                        child.SetPath(os.path.normpath(os.path.join(directory, value)))
+                absolutize_files(child)
+
+        for root in model_cast.Roots():
+            absolutize_files(root)
+            for model in root.ChildrenOfType(serializer.Model):
+                for mesh in model.Meshes():
+                    if mesh.MaximumWeightInfluence() > 0:
+                        mesh.SetSkinningMethod("quaternion")
+        return model_cast
+
+
+def export_cast_animation(path, result):
+    """Combine the unchanged rest model with the writer's baked animation."""
+    _require_cast_model_export_version()
+    bind_model = getattr(result, "_cast_bind_model", None)
+    if bind_model is None:
+        raise RuntimeError(getattr(result, "_cast_bind_error", "") or
+                           "Animation CAST export needs its original assembled bind model")
+    with _temporary_cast_export_settings(animation=True, model=False):
+        with _temporary_baked_joint_animation(result.frame_range):
+            cmds.file(
+                path, force=True, type=cast_translator_name(), exportAll=True,
+                options="exportModel=0;exportAnim=1;bakeKeyframes=1")
+    combined = _castplugin_module().Cast.load(path)
+    serializer = sys.modules[_castplugin_module().Cast.__module__]
+    root = combined.Roots()[0]
+    for bind_root in bind_model.Roots():
+        for model in bind_root.ChildrenOfType(serializer.Model):
+            root.CreateChild(copy.deepcopy(model))
+    combined.save(path)
+    model_report = verify_exported_cast(
+        path, result.source_joint_name, result.target_joint_name,
+        allow_animation=True)
+    if isinstance(result, DualWieldResult):
+        verify_exported_cast(
+            path, _short_name(result.right_source_node),
+            _short_name(result.right_target_node), allow_animation=True)
+    animation = _cast_animation_inventory(path, allow_models=True)
+    if tuple(animation["frame_range"]) != tuple(result.frame_range):
+        raise RuntimeError("CAST output has an incorrect animation frame range")
+    if abs(animation["framerate"] - result.framerate) > 1e-5:
+        raise RuntimeError("CAST output has an incorrect animation frame rate")
+    model_report["animation"] = _public_animation_inventory(animation)
+    model_report["skinning_method"] = "dualQuaternion"
+    model_report["bind_pose_preserved"] = True
+    return model_report
+
+
+@contextmanager
+def _temporary_baked_joint_animation(frame_range):
+    """Sample scene evaluation before conversion, then restore original curves."""
+    joints = cmds.ls(type="joint", long=True) or []
+    if not joints:
+        raise RuntimeError("Animation export has no joints")
+    original_time = cmds.currentTime(query=True)
+    undo_enabled = cmds.undoInfo(query=True, state=True)
+    if not undo_enabled:
+        cmds.undoInfo(stateWithoutFlush=True)
+    cmds.undoInfo(openChunk=True, chunkName="ViewmodelAnimationExportBake")
+    try:
+        # Guarantee the chunk is nonempty even if the bake command fails.
+        marker = cmds.createNode("network", name="__vwt_export_bake_marker")
+        cmds.delete(marker)
+        cmds.bakeResults(
+            joints, time=frame_range, sampleBy=1, simulation=True,
+            sparseAnimCurveBake=False, preserveOutsideKeys=True,
+            attribute=["tx", "ty", "tz", "rx", "ry", "rz", "sx", "sy", "sz"])
+        yield
+    finally:
+        cmds.undoInfo(closeChunk=True)
+        try:
+            cmds.undo()
+        finally:
+            if not undo_enabled:
+                cmds.undoInfo(stateWithoutFlush=False)
+            cmds.currentTime(original_time, edit=True)
+
+
+def export_fbx_animation(path, frame_range):
+    """Export skinned geometry and baked animation; restore FBX preferences."""
+    translator = _ensure_fbx_exporter()
+    settings = (
+        ("FBXExportBakeComplexAnimation", "true"),
+        ("FBXExportBakeComplexStart", str(int(frame_range[0]))),
+        ("FBXExportBakeComplexEnd", str(int(frame_range[1]))),
+        ("FBXExportBakeComplexStep", "1"),
+        ("FBXExportBakeResampleAnimation", "true"),
+        ("FBXExportSkins", "true"),
+        ("FBXExportShapes", "true"),
+        ("FBXExportConstraints", "false"),
+        ("FBXExportInputConnections", "true"),
+        ("FBXExportAnimationOnly", "false"),
+    )
+    original = []
+    animation_property = "Export|IncludeGrp|Animation"
+    was_enabled = _fbx_property_query(animation_property)
+    try:
+        _fbx_property_set(animation_property, True)
+        for command, value in settings:
+            original.append((command, mel.eval(command + " -q")))
+            mel.eval("%s -v %s" % (command, value))
+        with _temporary_baked_joint_animation(frame_range):
+            cmds.file(path, force=True, type=translator,
+                      exportAll=True, options="v=0;")
+    finally:
+        for command, value in reversed(original):
+            if isinstance(value, bool):
+                value = "true" if value else "false"
+            mel.eval("%s -v %s" % (command, value))
+        _fbx_property_set(animation_property, was_enabled)
+    report = verify_exported_fbx(path)
+    report.update(animation_included=True, frame_range=list(frame_range),
+                  skinning_method="dualQuaternion")
+    return report
+
+
+def _smd_animation_joints():
+    """Use hierarchy order and nearest joint parents, folding in transforms."""
+    joints = sorted(cmds.ls(type="joint", long=True) or [],
+                    key=lambda node: (node.count("|"), node))
+    if not joints:
+        raise RuntimeError("SMD animation has no joints")
+    names = [_short_name(node) for node in joints]
+    if len(set(names)) != len(names):
+        raise RuntimeError("SMD animation requires unique joint names")
+    indexes = {node: index for index, node in enumerate(joints)}
+    records = []
+    for node, name in zip(joints, names):
+        parent = node.rsplit("|", 1)[0]
+        while parent and parent not in indexes:
+            parent = parent.rsplit("|", 1)[0]
+        selection = OpenMaya2.MSelectionList()
+        selection.add(node)
+        records.append((name, indexes.get(parent, -1), selection.getDagPath(0)))
+    return records
+
+
+def export_smd_animation(path, frame_range):
+    """Write Source SMD v1 skeletal frames (no mesh), in cm and XYZ radians."""
+    records = _smd_animation_joints()
+    original_time = cmds.currentTime(query=True)
+    previous_rotations = {}
+    try:
+        with open(path, "w", encoding="utf-8", newline="\n") as stream:
+            stream.write("version 1\nnodes\n")
+            for index, (name, parent, _) in enumerate(records):
+                stream.write('%d "%s" %d\n' % (
+                    index, _smd_safe_name(name, "joint_%d" % index), parent))
+            stream.write("end\nskeleton\n")
+            for frame in range(frame_range[0], frame_range[1] + 1):
+                cmds.currentTime(frame, edit=True)
+                matrices = [dag.inclusiveMatrix() for _, _, dag in records]
+                stream.write("time %d\n" % (frame - frame_range[0]))
+                for index, (name, parent, _) in enumerate(records):
+                    matrix = matrices[index]
+                    if parent >= 0:
+                        matrix = matrix * matrices[parent].inverse()
+                    transform = OpenMaya2.MTransformationMatrix(matrix)
+                    scale = transform.scale(OpenMaya2.MSpace.kTransform)
+                    shear = transform.shear(OpenMaya2.MSpace.kTransform)
+                    if any(abs(value - 1.0) > 1e-5 for value in scale) or any(
+                            abs(value) > 1e-5 for value in shear):
+                        raise RuntimeError(
+                            "SMD cannot store scale/shear: %s at frame %s"
+                            % (name, frame))
+                    position = transform.translation(OpenMaya2.MSpace.kTransform)
+                    rotation = transform.rotation().reorder(OpenMaya2.MEulerRotation.kXYZ)
+                    if index in previous_rotations:
+                        rotation = rotation.closestSolution(previous_rotations[index])
+                    previous_rotations[index] = rotation
+                    stream.write("%d %.9g %.9g %.9g %.9g %.9g %.9g\n" % (
+                        index, position.x, position.y, position.z,
+                        rotation.x, rotation.y, rotation.z))
+            stream.write("end\n")
+    finally:
+        cmds.currentTime(original_time, edit=True)
+    return {
+        "path": path, "size": os.path.getsize(path),
+        "bone_count": len(records), "animation_included": True,
+        "frame_count": frame_range[1] - frame_range[0] + 1,
+        "source_frame_range": list(frame_range), "start_frame": 0,
+        "mesh_included": False, "linear_unit": "cm", "rotation_unit": "radian",
+    }
+
+
+def _write_animation_outputs(result, options, allocate=True):
+    """Write selected animated formats and record independent format failures."""
+    validate_output_options(options)
+    result.frame_range = _animation_export_range()
+    result.framerate = float(_castplugin_module().utilityUnitToFramerate(
+        OpenMaya.MTime.uiUnit()))
+    if allocate:
+        _allocate_result_output_paths(result, options.output_dir, options)
+    result.output_errors = {}
+    # Keep the in-memory scene name out of the temporary baseline directory.
+    cmds.file(rename=result.output_scene or
+              os.path.splitext(result.output_manifest)[0] + ".ma")
+    for output in selected_output_formats(options):
+        attribute = "output_scene" if output == "ma" else "output_" + output
+        path = getattr(result, attribute)
+        try:
+            # Publish each file only after its writer/verification succeeds.
+            with tempfile.TemporaryDirectory(
+                    prefix=".vwt_", dir=os.path.dirname(path)) as staging:
+                temporary_path = os.path.join(staging, os.path.basename(path))
+                report = None
+                if output == "ma":
+                    cmds.file(rename=temporary_path)
+                    try:
+                        cmds.file(save=True, type="mayaAscii", force=True)
+                    finally:
+                        cmds.file(rename=path)
+                elif output == "cast":
+                    report = export_cast_animation(temporary_path, result)
+                elif output == "smd":
+                    report = export_smd_animation(temporary_path, result.frame_range)
+                elif output == "fbx":
+                    report = export_fbx_animation(temporary_path, result.frame_range)
+                if not os.path.isfile(temporary_path) or not os.path.getsize(temporary_path):
+                    raise RuntimeError("Animation output was not written")
+                os.replace(temporary_path, path)
+                if report is not None:
+                    report["path"] = path
+                    setattr(result, output + "_verification", report)
+        except Exception as exc:
+            result.output_errors[output] = str(exc)
+            log("ANIMATION EXPORT ERROR %s: %s" % (output, exc))
+    _write_manifest(result)
+
+
+def _animation_jobs(paths, dual=False):
+    """Normalize local paths and remove duplicates without reordering jobs."""
+    if isinstance(paths, (str, bytes)):
+        raise RuntimeError("Expected an animation list, not one path string")
+    jobs = []
+    seen = set()
+    for value in paths:
+        if dual:
+            if isinstance(value, (str, bytes)) or len(value) != 2:
+                raise RuntimeError("Each dual animation job needs a left/right pair")
+            values = value
+        else:
+            values = (value,)
+        normalized = []
+        for path in values:
+            path = str(path).strip()
+            if not path:
+                raise RuntimeError("Animation queue contains an empty path")
+            if not re.match(r"^[A-Za-z]:[/\\]", path):
+                path = _local_path_from_drop_url(path)
+            if not path:
+                raise RuntimeError("Animation queue requires local file paths")
+            normalized.append(os.path.normpath(os.path.abspath(path)))
+        key = tuple(os.path.normcase(path) for path in normalized)
+        if key not in seen:
+            jobs.append(tuple(normalized))
+            seen.add(key)
+    if not jobs:
+        raise RuntimeError("Add at least one animation to the queue")
+    return jobs
+
+
+def _run_animation_queue(viewhands_path, weapon_path, paths, options,
+                         dual=False, progress=None):
+    """Run independent clips/pairs; progress returns False to cancel between jobs."""
+    global _LAST_RESULT
+    validate_output_options(options)
+    jobs = _animation_jobs(paths, dual=dual)
+    viewhands_path = _validate_cast_path(viewhands_path, "Viewhands")
+    weapon_path = _validate_cast_path(weapon_path, "Weapon")
+    if not dual:
+        preflight_inputs(viewhands_path, weapon_path,
+                         options.source_joint, options.target_joint)
+    if cmds.file(query=True, modified=True) and not options.force_new_scene:
+        raise RuntimeError("Save the current scene or approve a new scene first")
+    options = replace(options, force_new_scene=True, export_animation=True)
+    output_dir = resolved_output_directories(options)["manifest"]
+    os.makedirs(output_dir, exist_ok=True)
+    descriptor, summary_path = tempfile.mkstemp(
+        prefix="dual_animation_batch_" if dual else "animation_batch_",
+        suffix=".json", dir=output_dir)
+    os.close(descriptor)
+    summary = {
+        "plugin_version": VERSION, "dual": dual,
+        "viewhands_path": viewhands_path, "weapon_path": weapon_path,
+        "requested_formats": list(selected_output_formats(options)),
+        "total": len(jobs), "completed": 0, "cancelled": False,
+        "items": [], "summary_path": summary_path,
+    }
+    def save_summary():
+        with open(summary_path, "w", encoding="utf-8") as stream:
+            json.dump(summary, stream, ensure_ascii=False, indent=2)
+
+    save_summary()
+    with tempfile.TemporaryDirectory(prefix="vwt_animation_batch_") as temporary:
+        baseline_path = os.path.join(temporary, "baseline.ma")
+        baseline_result = None
+        try:
+            for index, job in enumerate(jobs):
+                if progress is not None and progress(index, len(jobs), job) is False:
+                    summary["cancelled"] = True
+                    break
+                item = {"inputs": list(job), "status": "failed"}
+                _LAST_RESULT = None
+                try:
+                    for path in job:
+                        _cast_animation_inventory(_validate_cast_path(path, "Animation"))
+                    if dual:
+                        result = attach_dual_wield(
+                            viewhands_path, weapon_path, job[0], job[1], options)
+                    else:
+                        if baseline_result is None:
+                            baseline_result = _build_single_attachment(
+                                viewhands_path, weapon_path, options)
+                            cmds.file(rename=baseline_path)
+                            cmds.file(save=True, type="mayaAscii", force=True)
+                        else:
+                            cmds.file(baseline_path, open=True, force=True,
+                                      prompt=False, executeScriptNodes=False)
+                        result = replace(
+                            baseline_result, animated_outputs=True,
+                            warnings=list(baseline_result.warnings),
+                            animation_path=job[0])
+                        if hasattr(baseline_result, "_cast_bind_model"):
+                            result._cast_bind_model = baseline_result._cast_bind_model
+                        if hasattr(baseline_result, "_cast_bind_error"):
+                            result._cast_bind_error = baseline_result._cast_bind_error
+                        _LAST_RESULT = result
+                        result.animation_verification = import_animation_file(
+                            job[0], protect_translation=True,
+                            source_joint=options.source_joint,
+                            target_joint=options.target_joint)
+                        if not result.animation_verification["anim_curve_count"]:
+                            raise RuntimeError("Animation contains no matching joint tracks")
+                        _write_animation_outputs(result, options)
+                    item.update(
+                        status=("failed" if len(result.output_errors) ==
+                                len(selected_output_formats(options)) else
+                                "partial" if result.output_errors else "ok"),
+                        manifest=result.output_manifest,
+                        output_errors=dict(result.output_errors),
+                        outputs={name: getattr(result, "output_%s" % name)
+                                 for name in ("scene", "cast", "smd", "fbx")
+                                 if getattr(result, "output_%s" % name) and
+                                 ("ma" if name == "scene" else name)
+                                 not in result.output_errors},
+                        frame_range=list(result.frame_range),
+                        framerate=result.framerate)
+                except Exception as exc:
+                    _LAST_RESULT = None
+                    item["error"] = str(exc)
+                    log("BATCH ANIMATION ERROR %s: %s" % (job, exc))
+                    log(traceback.format_exc())
+                summary["items"].append(item)
+                summary["completed"] = index + 1
+                save_summary()
+        finally:
+            if os.path.normpath(cmds.file(query=True, sceneName=True)) == baseline_path:
+                cmds.file(rename="untitled")
+            save_summary()
+    return summary
+
+
+def batch_export_animations(viewhands_path, weapon_path, animation_paths,
+                            options=None, progress=None):
+    """Export one assembled single-weapon scene per animation CAST path."""
+    return _run_animation_queue(
+        viewhands_path, weapon_path, animation_paths,
+        options or AttachOptions(), progress=progress)
+
+
+def batch_export_dual_animations(viewhands_path, weapon_path, animation_pairs,
+                                 options=None, progress=None):
+    """Export one dual-wield scene per explicit (left, right) CAST pair."""
+    return _run_animation_queue(
+        viewhands_path, weapon_path, animation_pairs,
+        options or DualWieldOptions(), dual=True, progress=progress)
 
 
 # ---------------------------------------------------------------------------
@@ -3817,6 +4314,8 @@ def save_current_result():
         export_fbx=bool(requested.get("fbx")),
     )
     _write_result_outputs(_LAST_RESULT, options, allocate=False)
+    if _LAST_RESULT.output_errors:
+        raise RuntimeError("Some animation outputs failed: %s" % _LAST_RESULT.output_errors)
     return _LAST_RESULT.output_scene or _LAST_RESULT.output_manifest
 
 
@@ -4471,7 +4970,176 @@ def _validate_dual_ui():
         _show_error("%s - Dual Validation Failed" % PRODUCT_SHORT_NAME, exc)
 
 
-def show_dual_dialog():
+def _add_animation_queue_ui(dual=False, form=None, scroll=None):
+    """Add a queue to a builder; paths remain visible in their explicit order."""
+    jobs = []
+    running = {"cancel": False}
+    cmds.separator(height=8, style="in")
+    cmds.text(label="Batch skinning: DQS (Dual Quaternion).", align="left")
+    cmds.text(label=("Animation pairs (left | right):" if dual else
+                     "Animation queue:"), align="left")
+    def show_selected_paths(*_):
+        selected = cmds.textScrollList(BATCH_ANIMATION_LIST, query=True,
+                                       selectIndexedItem=True) or []
+        cmds.scrollField(details, edit=True, text="\n\n".join(
+            "\n".join(jobs[index - 1]) for index in selected))
+
+    cmds.textScrollList(BATCH_ANIMATION_LIST, height=95,
+                        allowMultiSelection=True, selectCommand=show_selected_paths)
+    cmds.text(label="Selected paths (left, then right):" if dual else "Selected paths:", align="left")
+    details = cmds.scrollField(editable=False, wordWrap=True, height=55)
+
+    def redraw():
+        cmds.textScrollList(BATCH_ANIMATION_LIST, edit=True, removeAll=True)
+        for index, job in enumerate(jobs):
+            cmds.textScrollList(BATCH_ANIMATION_LIST, edit=True,
+                                append="%d. %s" % (index + 1, " | ".join(os.path.basename(p) for p in job)))
+        cmds.scrollField(details, edit=True, text="")
+
+    def add_current_pair(*_):
+        try:
+            pairs = jobs + [(_field_text(DUAL_LEFT_ANIMATION_FIELD),
+                             _field_text(DUAL_RIGHT_ANIMATION_FIELD))]
+            jobs[:] = _animation_jobs(pairs, dual=True)
+            redraw()
+        except Exception as exc:
+            _show_error(PRODUCT_SHORT_NAME, exc)
+
+    def add_files(*_):
+        try:
+            left = cmds.fileDialog2(
+                fileMode=4, fileFilter="Cast (*.cast)", dialogStyle=2,
+                caption="Select left animations" if dual else "Select animations") or []
+            if not left:
+                return
+            if dual:
+                right = cmds.fileDialog2(
+                    fileMode=4, fileFilter="Cast (*.cast)", dialogStyle=2,
+                    caption="Select right animations (same order)") or []
+                if not right:
+                    return
+                if len(left) != len(right):
+                    raise RuntimeError("Left and right animation counts must match")
+                jobs[:] = _animation_jobs(jobs + list(zip(left, right)), dual=True)
+            else:
+                jobs[:] = _animation_jobs([job[0] for job in jobs] + left)
+            redraw()
+        except Exception as exc:
+            _show_error(PRODUCT_SHORT_NAME, exc)
+
+    def remove_selected(*_):
+        for index in sorted(cmds.textScrollList(
+                BATCH_ANIMATION_LIST, query=True, selectIndexedItem=True) or [],
+                reverse=True):
+            del jobs[index - 1]
+        redraw()
+
+    queue_controls = cmds.rowLayout(numberOfColumns=4,
+                                   columnWidth4=(185, 185, 185, 185))
+    if dual:
+        cmds.button(label="Add Current Pair", command=add_current_pair)
+    cmds.button(label="Add Animation Pairs..." if dual else "Add Animations...",
+                command=add_files)
+    cmds.button(label="Remove Selected", command=remove_selected)
+    cmds.button(label="Clear Queue", command=lambda *_: (jobs.clear(), redraw()))
+    cmds.setParent("..")
+    if dual:
+        cmds.text(label="Check every left/right pair in the queue before exporting.", align="left")
+    if form is not None:
+        cmds.setParent(form)
+        footer = cmds.columnLayout(adjustableColumn=True, rowSpacing=6,
+                                   columnOffset=("both", 10))
+        cmds.formLayout(form, edit=True,
+                        attachForm=[(scroll, "top", 0), (scroll, "left", 0),
+                                    (scroll, "right", 0), (footer, "left", 0),
+                                    (footer, "right", 0), (footer, "bottom", 10)],
+                        attachControl=[(scroll, "bottom", 8, footer)])
+    cmds.text(BATCH_ANIMATION_STATUS, label="Ready", align="left")
+    cmds.progressBar(BATCH_ANIMATION_PROGRESS, maxValue=1, progress=0, height=16)
+
+    def update_progress(index, total, job):
+        if not cmds.control(BATCH_ANIMATION_STATUS, exists=True):
+            return False
+        cmds.progressBar(BATCH_ANIMATION_PROGRESS, edit=True,
+                         maxValue=total, progress=index)
+        cmds.text(BATCH_ANIMATION_STATUS, edit=True,
+                  label="%d / %d: %s" % (index + 1, total, os.path.basename(job[0])))
+        cmds.refresh()
+        # Process the Cancel button while respecting the current clip boundary.
+        try:
+            from PySide6.QtWidgets import QApplication
+        except ImportError:
+            from PySide2.QtWidgets import QApplication
+        QApplication.processEvents()
+        return not running["cancel"] and cmds.control(BATCH_ANIMATION_STATUS, exists=True)
+
+    def run_queue(*_):
+        try:
+            options = _dual_dialog_options() if dual else _dialog_options()
+            validate_output_options(options)
+            queue = _animation_jobs(jobs if dual else [job[0] for job in jobs], dual)
+            hands = _field_text(DUAL_VIEWHANDS_FIELD if dual else VIEWHANDS_FIELD)
+            weapon = _field_text(DUAL_WEAPON_FIELD if dual else WEAPON_FIELD)
+            _validate_cast_path(hands, "Viewhands")
+            _validate_cast_path(weapon, "Weapon")
+            if not _confirm_scene_reset():
+                return
+            options.force_new_scene = True
+            if dual:
+                _save_dual_dialog_settings((hands, weapon) + queue[0], options)
+            else:
+                save_options(hands, options)
+            running["cancel"] = False
+            cmds.button(start_button, edit=True, enable=False)
+            cmds.button(cancel_button, edit=True, enable=True)
+            cmds.rowLayout(queue_controls, edit=True, enable=False)
+            runner = batch_export_dual_animations if dual else batch_export_animations
+            summary = runner(hands, weapon, queue if dual else [j[0] for j in queue],
+                             options, progress=update_progress)
+            log("Batch report: %s" % summary["summary_path"])
+            if not cmds.control(BATCH_ANIMATION_STATUS, exists=True):
+                return
+            counts = {status: sum(item["status"] == status for item in summary["items"])
+                      for status in ("ok", "partial", "failed")}
+            cmds.progressBar(BATCH_ANIMATION_PROGRESS, edit=True,
+                             progress=summary["completed"])
+            status = "Cancelled" if summary["cancelled"] else "Finished"
+            cmds.text(BATCH_ANIMATION_STATUS, edit=True, label=status)
+            cmds.confirmDialog(title=PRODUCT_SHORT_NAME,
+                               message=("%s\nOK: %d\nPartial: %d\nFailed: %d\nReport: %s" % (
+                                   status, counts["ok"], counts["partial"], counts["failed"],
+                                   summary["summary_path"])), button=["OK"])
+        except Exception as exc:
+            if cmds.control(BATCH_ANIMATION_STATUS, exists=True):
+                cmds.text(BATCH_ANIMATION_STATUS, edit=True, label="Failed")
+            _show_error(PRODUCT_SHORT_NAME, exc)
+        finally:
+            if cmds.button(start_button, exists=True):
+                cmds.button(start_button, edit=True, enable=True)
+                cmds.button(cancel_button, edit=True, enable=False)
+                cmds.rowLayout(queue_controls, edit=True, enable=True)
+
+    cmds.rowLayout(numberOfColumns=2, columnWidth2=(250, 250))
+    start_button = cmds.button(label="Batch Export Animations", height=32, command=run_queue)
+    cancel_button = cmds.button(label="Cancel After Current Item", height=32, enable=False,
+                                command=lambda *_: running.update(cancel=True))
+    cmds.setParent("..")
+
+
+def _open_batch_from_builder(dual=False):
+    if dual:
+        _save_dual_dialog_settings((
+            _field_text(DUAL_VIEWHANDS_FIELD), _field_text(DUAL_WEAPON_FIELD),
+            _field_text(DUAL_LEFT_ANIMATION_FIELD), _field_text(DUAL_RIGHT_ANIMATION_FIELD)),
+            _dual_dialog_options())
+        show_dual_dialog(batch=True)
+    else:
+        weapon = _field_text(WEAPON_FIELD)
+        save_options(_field_text(VIEWHANDS_FIELD), _dialog_options())
+        show_dialog(batch=True, weapon_path=weapon)
+
+
+def show_dual_dialog(batch=False):
     """Build and show the duplicated-weapon Dual-Wield Builder."""
     if cmds.window(WINDOW_NAME, exists=True):
         cmds.deleteUI(WINDOW_NAME)
@@ -4480,10 +5148,14 @@ def show_dual_dialog():
     saved = load_saved_options()
     win = cmds.window(
         DUAL_WINDOW_NAME,
-        title="%s v%s - Dual-Wield Builder" % (PRODUCT_SHORT_NAME, VERSION),
-        widthHeight=(880, 690),
-        resizeToFitChildren=True,
+        title="%s v%s - %s" % (PRODUCT_SHORT_NAME, VERSION,
+                               "Dual Animation Batch" if batch else "Dual-Wield Builder"),
+        widthHeight=(880, 860 if batch else 690),
+        resizeToFitChildren=not batch,
     )
+    if batch:
+        batch_form = cmds.formLayout()
+        batch_scroll = cmds.scrollLayout(childResizable=True)
     cmds.columnLayout(
         adjustableColumn=True, rowSpacing=7, columnOffset=("both", 10))
     cmds.text(
@@ -4578,7 +5250,7 @@ def show_dual_dialog():
     cmds.setParent("..")
 
     cmds.text(
-        label=(
+        label=("Animated formats (independent folders; select at least one):" if batch else
             "Output formats and folders (blank folder uses "
             "Manifest/default; Cast/SMD/FBX are static model outputs):"),
         align="left",
@@ -4587,7 +5259,7 @@ def show_dual_dialog():
     def add_output_row(check_name, label, enabled, field_name, value):
         cmds.rowLayout(
             numberOfColumns=3,
-            columnWidth3=(220, 570, 75),
+            columnWidth3=(280 if batch else 220, 510 if batch else 570, 75),
             adjustableColumn=2,
         )
         cmds.checkBox(check_name, label=label, value=enabled)
@@ -4602,15 +5274,22 @@ def show_dual_dialog():
         EXPORT_MA_CHECK, "Maya ASCII scene + animation (.ma)",
         saved.save_scene, MA_OUTPUT_DIR_FIELD, saved.ma_output_dir)
     add_output_row(
-        EXPORT_CAST_CHECK, "Static combined model Cast (.cast)",
+        EXPORT_CAST_CHECK, "Model + animation CAST (.cast)" if batch else "Static combined model Cast (.cast)",
         saved.export_cast, CAST_OUTPUT_DIR_FIELD, saved.cast_output_dir)
     add_output_row(
-        EXPORT_SMD_CHECK, "Static Source model (.smd)",
+        EXPORT_SMD_CHECK, "Skeleton animation only (.smd)" if batch else "Static Source model (.smd)",
         saved.export_smd, SMD_OUTPUT_DIR_FIELD, saved.smd_output_dir)
     add_output_row(
-        EXPORT_FBX_CHECK, "Static model with skinning (.fbx)",
+        EXPORT_FBX_CHECK, "Skinned model + animation (.fbx)" if batch else "Static model with skinning (.fbx)",
         saved.export_fbx, FBX_OUTPUT_DIR_FIELD, saved.fbx_output_dir)
 
+    if batch:
+        _add_animation_queue_ui(dual=True, form=batch_form, scroll=batch_scroll)
+        cmds.window(win, edit=True, topLeftCorner=(60, 60))
+        cmds.showWindow(win)
+        return
+    cmds.button(label="Dual Animation Batch...",
+                command=lambda *_: _open_batch_from_builder(dual=True))
     cmds.separator(height=5, style="in")
     cmds.rowLayout(numberOfColumns=3, columnWidth3=(220, 220, 220))
     cmds.button(
@@ -4640,7 +5319,7 @@ def show_dual_dialog():
     cmds.showWindow(win)
 
 
-def show_dialog():
+def show_dialog(batch=False, weapon_path=""):
     """Build and show the single-weapon dialog."""
     if cmds.window(WINDOW_NAME, exists=True):
         cmds.deleteUI(WINDOW_NAME)
@@ -4650,10 +5329,14 @@ def show_dialog():
     saved = load_saved_options()
     win = cmds.window(
         WINDOW_NAME,
-        title="%s v%s - Single Weapon" % (PRODUCT_SHORT_NAME, VERSION),
-        widthHeight=(820, 540),
-        resizeToFitChildren=True,
+        title="%s v%s - %s" % (PRODUCT_SHORT_NAME, VERSION,
+                               "Single Animation Batch" if batch else "Single Weapon"),
+        widthHeight=(820, 760 if batch else 540),
+        resizeToFitChildren=not batch,
     )
+    if batch:
+        batch_form = cmds.formLayout()
+        batch_scroll = cmds.scrollLayout(childResizable=True)
     cmds.columnLayout(
         adjustableColumn=True,
         rowSpacing=7,
@@ -4681,7 +5364,7 @@ def show_dialog():
         "Viewhands:", VIEWHANDS_FIELD, load_viewhands_path(),
         lambda *_: _browse_cast(VIEWHANDS_FIELD))
     add_path_row(
-        "Weapon:", WEAPON_FIELD, "",
+        "Weapon:", WEAPON_FIELD, weapon_path,
         lambda *_: _browse_cast(WEAPON_FIELD))
     add_path_row(
         "Manifest/default:", OUTPUT_DIR_FIELD, saved.output_dir,
@@ -4702,7 +5385,8 @@ def show_dialog():
     cmds.checkBox(
         PROTECT_TRANSLATION_CHECK,
         label="Protect weapon joint translation when importing animation",
-        value=saved.protect_translation,
+        value=True if batch else saved.protect_translation,
+        enable=not batch,
     )
     cmds.text(
         label=("Output formats and folders (select at least one; blank folder "
@@ -4713,7 +5397,7 @@ def show_dialog():
     def add_output_row(check_name, label, enabled, field_name, value):
         cmds.rowLayout(
             numberOfColumns=3,
-            columnWidth3=(215, 505, 75),
+            columnWidth3=(275 if batch else 215, 445 if batch else 505, 75),
             adjustableColumn=2,
         )
         cmds.checkBox(check_name, label=label, value=enabled)
@@ -4725,22 +5409,30 @@ def show_dialog():
         cmds.setParent("..")
 
     add_output_row(
-        EXPORT_MA_CHECK, "Maya ASCII scene (.ma)", saved.save_scene,
+        EXPORT_MA_CHECK, "Maya ASCII scene + animation (.ma)" if batch else "Maya ASCII scene (.ma)", saved.save_scene,
         MA_OUTPUT_DIR_FIELD, saved.ma_output_dir)
     add_output_row(
-        EXPORT_CAST_CHECK, "Combined model Cast (.cast)", saved.export_cast,
+        EXPORT_CAST_CHECK, "Model + animation CAST (.cast)" if batch else "Combined model Cast (.cast)", saved.export_cast,
         CAST_OUTPUT_DIR_FIELD, saved.cast_output_dir)
     add_output_row(
-        EXPORT_SMD_CHECK, "Source model (.smd)", saved.export_smd,
+        EXPORT_SMD_CHECK, "Skeleton animation only (.smd)" if batch else "Source model (.smd)", saved.export_smd,
         SMD_OUTPUT_DIR_FIELD, saved.smd_output_dir)
     add_output_row(
-        EXPORT_FBX_CHECK, "Static model with skinning (.fbx)",
+        EXPORT_FBX_CHECK, "Skinned model + animation (.fbx)" if batch else "Static model with skinning (.fbx)",
         saved.export_fbx, FBX_OUTPUT_DIR_FIELD, saved.fbx_output_dir)
     cmds.text(
-        label=(".cast/.smd model export uses bundled/compatible Cast v1.99; "
+        label=("SMD stores skeletal animation only; use the JSON report for its frame rate." if batch else
+               ".cast/.smd model export uses bundled/compatible Cast v1.99; "
                ".fbx excludes animation."),
         align="left",
     )
+    if batch:
+        _add_animation_queue_ui(form=batch_form, scroll=batch_scroll)
+        cmds.window(win, edit=True, topLeftCorner=(60, 60))
+        cmds.showWindow(win)
+        return
+    cmds.button(label="Single Animation Batch...",
+                command=lambda *_: _open_batch_from_builder())
     cmds.separator(height=5, style="in")
 
     cmds.rowLayout(
@@ -4868,6 +5560,11 @@ def create_menu():
         command=lambda *_: show_dual_dialog(),
     )
     cmds.menuItem(divider=True)
+    cmds.menuItem(label="Single Animation Batch...",
+                  command=lambda *_: show_dialog(batch=True))
+    cmds.menuItem(label="Dual Animation Batch...",
+                  command=lambda *_: show_dual_dialog(batch=True))
+    cmds.menuItem(divider=True)
     cmds.menuItem(label="Import Animation Safely...",
                   command=lambda *_: import_animation())
     cmds.menuItem(
@@ -4903,8 +5600,13 @@ def create_menu():
 
 
 def initializePlugin(m_object):
-    global _CAST_TRANSLATOR_FALLBACK_REGISTERED
+    global _CAST_TRANSLATOR_FALLBACK_REGISTERED, _TOOLKIT_PLUGIN_PATH
     plugin = OpenMayaMPx.MFnPlugin(m_object, "OpenCode", VERSION, "Any")
+    try:
+        _TOOLKIT_PLUGIN_PATH = os.path.normpath(os.path.abspath(
+            cmds.pluginInfo(plugin.name(), query=True, path=True)))
+    except Exception:
+        _TOOLKIT_PLUGIN_PATH = globals().get("__file__", "")
     plugin.registerCommand(COMMAND_NAME, cmdCreator)
     try:
         plugin.registerCommand(LEGACY_COMMAND_NAME, cmdCreator)

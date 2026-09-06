@@ -1,0 +1,78 @@
+"""Smoke-test one assembled English or Simplified Chinese release directory."""
+
+import argparse
+import hashlib
+import os
+from pathlib import Path
+
+import maya.cmds as cmds
+
+if not hasattr(cmds, "pluginInfo"):
+    import maya.standalone
+    maya.standalone.initialize(name="python")
+
+
+CAST_HASHES = {
+    "cast.py": "d1ff7fcb2a184f208b21be34485d1863834ae33811078a28a2ccf6ff61f2c577",
+    "castplugin.py": "7f57829bc05978d817af93caeeaea7566baf0959b783df5b82747a7fbd279a06",
+}
+
+
+def same_path(left, right):
+    return os.path.normcase(os.path.abspath(str(left))) == \
+        os.path.normcase(os.path.abspath(str(right)))
+
+
+def main(package, edition):
+    package = Path(package).resolve()
+    plugin_dir = package / "plug-ins"
+    expected = {
+        "CHANGELOG.md", "LICENSE", "README.md", "README.zh-CN.md",
+        "SECURITY.md", "THIRD_PARTY_NOTICES.md", "plug-ins", "third_party",
+    }
+    assert expected.issubset({item.name for item in package.iterdir()})
+    assert not list(package.rglob("cast.cfg"))
+    assert not list(package.rglob("castpluginoptions.mel"))
+    assert not list(package.rglob("__pycache__"))
+    assert not list(package.rglob("*.pyc"))
+    for name, expected_hash in CAST_HASHES.items():
+        actual = hashlib.sha256((plugin_dir / name).read_bytes()).hexdigest()
+        assert actual == expected_hash, (name, actual)
+
+    entry = plugin_dir / ("viewmodel_weapon_toolkit_zh_CN.py"
+                          if edition == "zh-CN" else "viewmodel_weapon_toolkit.py")
+    plugin_name = entry.stem
+    cmds.loadPlugin(str(entry), quiet=True)
+    assert str(cmds.pluginInfo(plugin_name, query=True, version=True)) == "3.1.0"
+    assert hasattr(cmds, "viewmodelWeaponToolkit") and hasattr(cmds, "attachGun")
+    # In Maya Batch the toolkit owns the fallback translator registration;
+    # castplugin.py is loaded as the adjacent implementation module.
+    import sys
+    cast_module = sys.modules.get("castplugin")
+    assert cast_module is not None
+    assert same_path(getattr(cast_module, "__file__", ""),
+                     plugin_dir / "castplugin.py"), getattr(cast_module, "__file__", "")
+    assert str(getattr(cast_module, "version", "")) == "1.99"
+    translators = cmds.pluginInfo(plugin_name, query=True, translator=True) or []
+    if isinstance(translators, str):
+        translators = [translators]
+    assert any(str(name).lower() == "cast" for name in translators), translators
+    if edition == "zh-CN":
+        localized_core = sys.modules.get("viewmodel_weapon_toolkit_zh_cn_core")
+        assert localized_core is not None
+        translate = getattr(localized_core, "_zh_cn_translate_ui_text", None)
+        assert translate is not None
+        assert translate("Dual Animation Batch...") == "双持动画批量导出…"
+        assert translate("Batch skinning: DQS (Dual Quaternion).") == \
+            "批量蒙皮：DQS（双四元数）。"
+    cmds.file(new=True, force=True)
+    cmds.unloadPlugin(plugin_name, force=True)
+    print("RELEASE_PACKAGE_OK", edition, package)
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("package")
+    parser.add_argument("edition", choices=("en", "zh-CN"))
+    arguments = parser.parse_args()
+    main(arguments.package, arguments.edition)

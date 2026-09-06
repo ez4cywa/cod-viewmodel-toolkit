@@ -2,6 +2,26 @@
 
 All notable changes to this project are documented here.
 
+## [3.1.0] - 2026-09-06
+
+- Added single-weapon animation queues and explicit left/right dual-animation
+  pair queues in the English and Simplified Chinese interfaces.
+- Added independently selected animated MA, CAST, FBX, and skeletal SMD
+  outputs with separate folders, versioned names, progress, and cancellation.
+- Use DQS skinning for both batch workflows and preserve it in MA/FBX/CAST.
+- Preserve the assembled rest model for animated CAST exports instead of
+  rebinding a posed mesh, and explicitly sample multi-axis rotation before
+  CAST/FBX conversion while restoring the original scene curves afterward.
+- Isolated every clip/pair to prevent leftover keys; record per-format and
+  per-item failures without stopping subsequent jobs.
+- Preserved dual simultaneous/sequential modes and reference-pose compensation;
+  original builder model-export behavior remains unchanged.
+- Added generated-fixture Maya regression coverage, including animated FBX
+  round trips, queue deduplication, same-name collision handling, and failure continuation.
+- Prefer a release package's adjacent CAST translator when no CAST plugin is
+  already loaded, allowing self-contained installs without overwriting Maya's
+  existing CAST files.
+
 ## [3.0.3] - 2026-09-04
 
 - Added optional reference-viewhands rest-pose compensation for dual-wield

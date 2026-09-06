@@ -1,4 +1,4 @@
-"""Simplified Chinese entry point for Maya Viewmodel Weapon Toolkit 3.0.3.
+"""Simplified Chinese entry point for Maya Viewmodel Weapon Toolkit 3.1.0.
 
 This file reuses the English implementation beside it and localizes Maya UI
 text at the command boundary. Technical identifiers, joint names, file
@@ -17,7 +17,7 @@ import sys
 import maya.cmds as _maya_cmds
 
 
-VERSION = "3.0.3"
+VERSION = "3.1.0"
 _LOADER_FILE = globals().get("__file__") or sys._getframe().f_code.co_filename
 _CORE_PATH = os.path.join(
     os.path.dirname(os.path.abspath(_LOADER_FILE)),
@@ -27,6 +27,33 @@ _CORE_MODULE_NAME = "viewmodel_weapon_toolkit_zh_cn_core"
 
 
 _EXACT_TRANSLATIONS = {
+    "Single Animation Batch...": "单武器动画批量导出…",
+    "Dual Animation Batch...": "双持动画批量导出…",
+    "Model + animation CAST (.cast)": "模型与动画 CAST（.cast）",
+    "Skeleton animation only (.smd)": "仅骨骼动画（.smd）",
+    "Skinned model + animation (.fbx)": "蒙皮模型与动画（.fbx）",
+    "Animated formats (independent folders; select at least one):": "动画输出格式（至少勾选一种，各格式目录独立）：",
+    "SMD stores skeletal animation only; use the JSON report for its frame rate.": "SMD 仅保存骨骼动画；帧率记录在 JSON 清单中。",
+    "Animation pairs (left | right):": "动画配对队列（左侧 | 右侧）：",
+    "Animation queue:": "动画队列：",
+    "Batch skinning: DQS (Dual Quaternion).": "批量蒙皮：DQS（双四元数）。",
+    "Selected paths:": "选中项完整路径：",
+    "Selected paths (left, then right):": "选中项完整路径（先左后右）：",
+    "Add Current Pair": "添加当前左右配对",
+    "Add Animation Pairs...": "批量添加动画配对…",
+    "Add Animations...": "添加多个动画…",
+    "Remove Selected": "移除选中项",
+    "Clear Queue": "清空队列",
+    "Ready": "就绪",
+    "Finished": "已完成",
+    "Failed": "失败",
+    "Cancelled": "已取消",
+    "Batch Export Animations": "开始批量导出动画",
+    "Cancel After Current Item": "当前项结束后取消",
+    "Check every left/right pair in the queue before exporting.": "导出前请检查队列中每一项的左右动画是否匹配。",
+    "Select animations": "选择多个动画",
+    "Select left animations": "选择多个左侧动画",
+    "Select right animations (same order)": "按对应顺序选择右侧动画",
     "Viewmodel Weapon Toolkit": "视角模型武器工具包",
     "Select": "选择",
     "Save": "保存",
@@ -83,6 +110,16 @@ _EXACT_TRANSLATIONS = {
 
 
 _PHRASE_TRANSLATIONS = (
+    ("Single Animation Batch", "单武器动画批量导出"),
+    ("Dual Animation Batch", "双持动画批量导出"),
+    ("Left and right animation counts must match", "左右动画数量必须一致"),
+    ("Add at least one animation to the queue", "请先向队列添加至少一个动画或动画配对"),
+    ("Animation queue contains an empty path", "动画队列中存在空路径"),
+    ("Finished\nOK:", "已完成\n成功："),
+    ("Cancelled\nOK:", "已取消\n成功："),
+    ("\nPartial:", "\n部分成功："),
+    ("\nFailed:", "\n失败："),
+    ("\nReport:", "\n报告："),
     ("About Viewmodel Weapon Toolkit", "关于视角模型武器工具包"),
     (" - File Browser", " - 文件浏览器"),
     (" - Unsaved Scene", " - 未保存场景"),

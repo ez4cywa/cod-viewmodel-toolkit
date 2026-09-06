@@ -2,12 +2,14 @@
 
 ## Source
 
-- [ ] `VERSION` is exactly `3.0.3` for this release.
+- [ ] `VERSION` is exactly `3.1.0` for this release.
 - [ ] The primary and legacy loaders both pass the identity test.
 - [ ] The Simplified Chinese loader passes identity and localization tests.
 - [ ] All distributed Python files parse as Python 3.7 syntax for the Maya
       2022 minimum compatibility target.
 - [ ] Single-weapon and both dual-animation modes pass in Maya 2025.
+- [ ] Single and dual batch queues pass all four animated formats, format
+      selection, failure continuation, cancellation, and FBX round-trip checks.
 - [ ] Reference-pose compensation passes in both English and Simplified
       Chinese editions and survives save/reopen validation.
 - [ ] The bundled patched CAST 1.99 translator is used for integration tests.
@@ -33,7 +35,8 @@
 - [ ] Set a concise description and add `maya`, `maya-plugin`, `cast`,
       `animation`, and `game-development` topics.
 - [ ] Push the reviewed local `main` branch.
-- [ ] Create a `3.0.3` release and attach separate English and Simplified Chinese
+- [ ] Create a `3.1.0` release and attach separate English and Simplified Chinese
       zip archives containing the toolkit and patched CAST runtime files.
 - [ ] Test both attached archives in a clean Maya 2025 user profile without a
       separately installed CAST translator.
+      Use `mayapy tests/verify_release_package.py <expanded-dir> en|zh-CN`.

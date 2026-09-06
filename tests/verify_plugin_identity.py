@@ -33,8 +33,8 @@ def _assert_loaded(path, plugin_name):
     version = str(cmds.pluginInfo(plugin_name, query=True, version=True))
     if not _same_path(loaded_path, path):
         raise RuntimeError("Maya loaded the wrong path: %s" % loaded_path)
-    if version != "3.0.3":
-        raise RuntimeError("Expected version 3.0.3, got %s" % version)
+    if version != "3.1.0":
+        raise RuntimeError("Expected version 3.1.0, got %s" % version)
     if not hasattr(cmds, "viewmodelWeaponToolkit"):
         raise RuntimeError("viewmodelWeaponToolkit command is missing")
     if not hasattr(cmds, "attachGun"):
@@ -189,12 +189,12 @@ def main():
     chinese_core = sys.modules.get("viewmodel_weapon_toolkit_zh_cn_core")
     if chinese_core is None:
         raise RuntimeError("Chinese shared core module is unavailable")
-    if chinese_core.VERSION != "3.0.3":
+    if chinese_core.VERSION != "3.1.0":
         raise RuntimeError("Chinese core changed the release version")
     translator = chinese_core.cmds._commands
     if translator is not cmds:
         raise RuntimeError("Chinese UI proxy is not attached to maya.cmds")
-    if chinese_core._zh_cn_entry_version != "3.0.3":
+    if chinese_core._zh_cn_entry_version != "3.1.0":
         raise RuntimeError("Chinese entry point changed the release version")
     translate_ui_text = chinese_core._zh_cn_translate_ui_text
     if translate_ui_text("Dual-Wield Builder...") != \

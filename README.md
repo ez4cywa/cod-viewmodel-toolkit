@@ -2,11 +2,11 @@
 
 [简体中文](README.zh-CN.md)
 
-Maya Viewmodel Weapon Toolkit 3.0.3 assembles Call of Duty-style CAST
+Maya Viewmodel Weapon Toolkit 3.1.0 assembles Call of Duty-style CAST
 viewhands and weapon models in Maya 2022 or newer running in Python 3 mode.
 It supports single-weapon setups, duplicated-weapon dual wield,
 collision-safe animation import, validation, and independently configured
-model exports. The release is tested on Maya 2025 for Windows.
+model and batch animation exports. The verification target is Maya 2025 for Windows.
 
 ## Features
 
@@ -22,6 +22,8 @@ model exports. The release is tested on Maya 2025 for Windows.
 - Route a dropped pure-animation CAST safely around duplicate joint names.
 - Export versioned Maya ASCII, CAST model, Source SMD, and static FBX files.
 - Choose formats and output folders independently.
+- Batch-export multiple single-weapon animations or explicit left/right dual
+  animation pairs, with progress, cancellation, and per-item reports.
 - Write a JSON verification manifest next to every result.
 - Include the project-patched CAST Maya translator based on upstream v1.99,
   with batch-mode, per-call option, and missing-UV export fixes.
@@ -112,13 +114,61 @@ and are reused when replacing a dual animation clip.
 
 ## Output behavior
 
-Maya ASCII (`.ma`) is the animation-authoritative output. CAST, SMD, and FBX
-are combined/static model exports; they are useful for interchange but should
-not be treated as replacements for the animated Maya scene.
+The original builders keep their existing output behavior: Maya ASCII (`.ma`)
+preserves the scene and animation; CAST, SMD, and FBX are static model exports.
+The new **Single Animation Batch...** and **Dual Animation Batch...** entries
+export animation in every selected format:
+
+| Format | Batch contents |
+| --- | --- |
+| MA | Complete Maya scene, skinning, and animation |
+| CAST | Combined model and baked skeletal animation |
+| FBX | Skinned model and baked animation |
+| SMD | Skeletal animation only, without mesh; frame zero is the clip start |
+
+Both batch workflows use **DQS (Dual Quaternion)** skinning. MA and FBX keep
+the Maya skinning mode; CAST writes `quaternion` mesh metadata and combines
+the original assembled rest model with sampled animation. Export sampling
+does not replace the original animation curves in the working scene. The
+installed/bundled CAST plugin files are not modified by this feature.
+
+SMD v1 does not store frame rate, scale, or shear. Read the frame rate from
+the JSON manifest and set it in the target application. Non-unit joint scale
+or shear causes that SMD export to fail explicitly; other selected formats
+can still succeed. SMD uses centimeters and XYZ Euler rotations in radians.
 
 All output formats are optional. Each enabled format can target a different
 folder. Existing files are not overwritten: the toolkit appends a version
 suffix such as `_v001`.
+
+## Batch animation workflow
+
+1. Open **Single Animation Batch...** or **Dual Animation Batch...** from
+   the toolkit menu or the corresponding builder.
+2. Choose one viewhands file and one weapon file. In dual mode, choose
+   simultaneous/sequential playback and, if needed, a reference pose.
+3. Single: **Add Animations...** accepts multiple CAST animation files.
+   Dual: select left/right paths and **Add Current Pair**, or use
+   **Add Animation Pairs...** to select the same number of left and right
+   files in corresponding order. Inspect the full-path pairs before running.
+4. Independently check MA, CAST, SMD, and/or FBX and choose output folders.
+   At least one format must be selected; blank folders use Manifest/default.
+5. Start **Batch Export Animations**. Each clip/pair starts from an isolated
+   scene. **Cancel After Current Item** finishes the current item and stops
+   before the next. Save any working scene when prompted before the batch.
+
+Each clip uses its imported frame range and frame rate; both clips in a dual
+pair must share a frame rate. Output names use the animation filename (the
+left filename for dual pairs) and a shared version suffix. Duplicate queue
+entries are removed, while distinct clips with the same basename get new
+versions. Failed items/formats are recorded and subsequent jobs continue.
+The final JSON batch report lists successful paths and individual failures.
+
+Python API: `batch_export_animations(hands, weapon, animation_paths, options)`
+and `batch_export_dual_animations(hands, weapon, [(left, right), ...], options)`.
+Use `AttachOptions` or `DualWieldOptions` respectively. The four existing
+output booleans and directory fields apply to both APIs. Both return the
+batch summary dictionary; they do not change the original static builder defaults.
 
 ## Known source-data warnings
 
@@ -139,7 +189,7 @@ minimum-version statement is a compatibility assessment, not a claim that
 the complete asset regression suite was executed in Maya 2022.
 
 The old filename, command, option variables, and dual-scene metadata remain
-supported in 3.0.3. This allows scenes and preferences created by Attach Gun to
+supported in 3.1.0. This allows scenes and preferences created by Attach Gun to
 continue working after the product rename.
 
 ## Testing
@@ -151,10 +201,13 @@ interpreter:
 python tests/verify_vendored_cast.py
 mayapy tests/verify_plugin_identity.py
 mayapy tests/verify_reference_pose_compensation.py
+mayapy tests/verify_batch_animation_export.py
 ```
 
-Full animation tests require suitable CAST assets and are therefore not
-included in the public repository.
+Batch regression tests generate synthetic CAST fixtures, check both dual
+playback modes and all four outputs, and compare FBX round-trip samples.
+Game assets are not included in the public repository.
+See [batch verification notes](docs/BATCH_ANIMATION_VERIFICATION.md) for coverage.
 
 ## License
 
