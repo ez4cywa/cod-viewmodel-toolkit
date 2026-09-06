@@ -110,6 +110,51 @@ _EXACT_TRANSLATIONS = {
 
 
 _PHRASE_TRANSLATIONS = (
+    ("CAST viewmodel assembly, safe animation import, and batch export for Maya.",
+     "面向 Maya 的 CAST 第一人称模型装配、安全动画导入与批量导出工具。"),
+    ("WORKFLOWS", "主要流程"),
+    ("- Single weapon: attach weapon:j_gun to viewhands:tag_weapon;\n"
+     "  includes preflight and validation.",
+     "- 单武器：将 weapon:j_gun 挂接到 viewhands:tag_weapon；\n"
+     "  包含预检和验证。"),
+    ("- Dual wield: duplicate one weapon onto tag_weapon_left/right;\n"
+     "  compose left/right clips in simultaneous or sequential mode.",
+     "- 双持：复制同一个武器到 tag_weapon_left/right；\n"
+     "  以同时或顺序模式合成左右动画。"),
+    ("- Optional reference-pose compensation corrects compatible weapon-tag\n"
+     "  offsets.",
+     "- 可选参考姿态补偿可修正兼容资源的武器挂点偏移。"),
+    ("- Pure-animation CAST import and drag/drop safely avoid duplicate-joint\n"
+     "  conflicts.",
+     "- 导入或拖放纯动画 CAST 时，会安全绕过重名关节冲突。"),
+    ("ANIMATION & EXPORT", "动画与导出"),
+    ("- Queue multiple single clips or explicit left/right dual pairs.",
+     "- 可排队多个单武器动画，或明确的左右双持动画配对。"),
+    ("- Builders: animated MA scenes plus optional static CAST/SMD/FBX\n"
+     "  model outputs.",
+     "- 构建器：输出含动画的 MA 场景，以及可选的静态 CAST/SMD/FBX 模型。"),
+    ("- Animation batches: animated MA/CAST/FBX and skeletal-animation SMD;\n"
+     "  all use DQS skinning.",
+     "- 动画批量导出：输出含动画的 MA/CAST/FBX 和仅骨骼动画的 SMD；\n"
+     "  统一使用 DQS 蒙皮。"),
+    ("- Choose formats and folders independently. Versioned names avoid\n"
+     "  overwrites; JSON reports record results.",
+     "- 格式与目录可独立选择；版本化命名避免覆盖；\n"
+     "  JSON 报告记录每项结果。"),
+    ("COMPATIBILITY", "兼容性"),
+    ("- Expected: Maya 2022+ in Python 3 mode.\n"
+     "  Verified: Maya 2025 for Windows.",
+     "- 预期兼容 Maya 2022+ 的 Python 3 模式；\n"
+     "  已在 Windows 版 Maya 2025 验证。"),
+    ("- Uses an already loaded compatible Cast translator, or the adjacent\n"
+     "  patched CAST 1.99 fallback.",
+     "- 优先使用已加载的兼容 Cast 转换器；\n"
+     "  否则回退到相邻的补丁版 CAST 1.99。"),
+    ("DUAL-WIELD SCOPE", "双持范围"),
+    ("- Duplicates the same weapon; does not merge two different weapon\n"
+     "  skeletons.",
+     "- 双持只复制同一个武器；不会合并两套不同的武器骨架。"),
+    ("Source and releases:", "源码与发布："),
     ("Single Animation Batch", "单武器动画批量导出"),
     ("Dual Animation Batch", "双持动画批量导出"),
     ("Left and right animation counts must match", "左右动画数量必须一致"),

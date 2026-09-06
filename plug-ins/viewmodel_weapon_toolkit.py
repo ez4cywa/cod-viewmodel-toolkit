@@ -5521,19 +5521,51 @@ def remove_menu():
         cmds.deleteUI(MENU_NAME, menu=True)
 
 
+def _about_message():
+    """Return the compact, user-facing product and capability summary."""
+    return (
+        "%s v%s\n"
+        "CAST viewmodel assembly, safe animation import, and batch export "
+        "for Maya.\n\n"
+        "WORKFLOWS\n"
+        "- Single weapon: attach weapon:j_gun to viewhands:tag_weapon;\n"
+        "  includes preflight and validation.\n"
+        "- Dual wield: duplicate one weapon onto tag_weapon_left/right;\n"
+        "  compose left/right clips in simultaneous or sequential mode.\n"
+        "- Optional reference-pose compensation corrects compatible "
+        "weapon-tag\n"
+        "  offsets.\n"
+        "- Pure-animation CAST import and drag/drop safely avoid "
+        "duplicate-joint\n"
+        "  conflicts.\n\n"
+        "ANIMATION & EXPORT\n"
+        "- Queue multiple single clips or explicit left/right dual pairs.\n"
+        "- Builders: animated MA scenes plus optional static CAST/SMD/FBX\n"
+        "  model outputs.\n"
+        "- Animation batches: animated MA/CAST/FBX and skeletal-animation "
+        "SMD;\n"
+        "  all use DQS skinning.\n"
+        "- Choose formats and folders independently. Versioned names avoid\n"
+        "  overwrites; JSON reports record results.\n\n"
+        "COMPATIBILITY\n"
+        "- Expected: Maya 2022+ in Python 3 mode.\n"
+        "  Verified: Maya 2025 for Windows.\n"
+        "- Uses an already loaded compatible Cast translator, or the "
+        "adjacent\n"
+        "  patched CAST 1.99 fallback.\n\n"
+        "DUAL-WIELD SCOPE\n"
+        "- Duplicates the same weapon; does not merge two different weapon\n"
+        "  skeletons.\n\n"
+        "Source and releases:\n"
+        "https://github.com/ez4cywa/maya-viewmodel-weapon-toolkit"
+        % (PRODUCT_NAME, VERSION)
+    )
+
+
 def _show_about():
     cmds.confirmDialog(
         title="About %s" % PRODUCT_SHORT_NAME,
-        message=("%s v%s\n\n"
-                 "weapon:j_gun -> viewhands:tag_weapon\n"
-                 "Dual mode duplicates one weapon onto tag_weapon_left/right.\n"
-                 "It does not combine two different weapon skeletons.\n"
-                 "Optional versioned .ma, .cast, .smd, and static .fbx outputs.\n"
-                  "Each format can use an independent output folder.\n"
-                  "A JSON verification manifest is always written.\n"
-                  "Pure animation CAST drops are safely routed by default.\n"
-                  "Uses Maya's Cast translator for imports."
-                  % (PRODUCT_NAME, VERSION)),
+        message=_about_message(),
         button=["OK"],
         defaultButton="OK",
     )

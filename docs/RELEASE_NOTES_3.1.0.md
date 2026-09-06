@@ -5,6 +5,8 @@
 This release adds animation batch export to both the single-weapon and
 dual-wield workflows.
 
+- The rewritten About dialog now summarizes the current workflows, animated
+  versus static outputs, DQS behavior, compatibility, and dual-wield scope.
 - Queue multiple single animations or explicit left/right dual-animation
   pairs. Dual batches retain simultaneous/sequential playback and optional
   reference-pose compensation.
@@ -32,6 +34,7 @@ same time. See the included README for installation and batch usage.
 
 本版本为单武器和双持流程增加动画批量导出。
 
+- 重写“关于”对话框，集中说明当前流程、动画/静态输出区别、DQS、兼容性与双持范围。
 - 单武器可排队多个动画；双持可排队明确的左右动画配对，并保留同时/顺序播放及
   可选参考姿态补偿。
 - MA、CAST、SMD、FBX 可独立勾选，并可分别指定输出目录。
@@ -51,6 +54,6 @@ same time. See the included README for installation and batch usage.
 ## SHA-256
 
 - `maya-viewmodel-weapon-toolkit-3.1.0-en.zip`:
-  `D9BD98A8045221868764689F85E4ABA5F24BD4DB54DD198D77C1F74C21043D9A`
+  `5AF49318B82DA81CA29A6451C5386D6FEACCE4054A5A1EBAB67BB3933CC8302B`
 - `maya-viewmodel-weapon-toolkit-3.1.0-zh-CN.zip`:
-  `4C635017AB0BFF6F212AEC7BB87D7C31752D00A3850A721523E0BF0D5DB48B56`
+  `B74C16915CCFD0781C4FD62001E683F3BC8C5D36A107283F15C8E024B7B625E1`

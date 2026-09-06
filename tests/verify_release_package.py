@@ -38,6 +38,11 @@ def main(package, edition):
     for name, expected_hash in CAST_HASHES.items():
         actual = hashlib.sha256((plugin_dir / name).read_bytes()).hexdigest()
         assert actual == expected_hash, (name, actual)
+    core_source = (plugin_dir / "viewmodel_weapon_toolkit.py").read_text(
+        encoding="utf-8")
+    for marker in ("def _about_message():", "ANIMATION & EXPORT",
+                   "DQS skinning", "does not merge two"):
+        assert marker in core_source, marker
 
     entry = plugin_dir / ("viewmodel_weapon_toolkit_zh_CN.py"
                           if edition == "zh-CN" else "viewmodel_weapon_toolkit.py")
@@ -65,6 +70,10 @@ def main(package, edition):
         assert translate("Dual Animation Batch...") == "双持动画批量导出…"
         assert translate("Batch skinning: DQS (Dual Quaternion).") == \
             "批量蒙皮：DQS（双四元数）。"
+        localized_about = translate(localized_core._about_message())
+        for marker in ("主要流程", "动画与导出", "DQS 蒙皮",
+                       "兼容性", "双持范围"):
+            assert marker in localized_about, marker
     cmds.file(new=True, force=True)
     cmds.unloadPlugin(plugin_name, force=True)
     print("RELEASE_PACKAGE_OK", edition, package)

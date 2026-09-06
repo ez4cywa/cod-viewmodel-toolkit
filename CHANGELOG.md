@@ -4,6 +4,8 @@ All notable changes to this project are documented here.
 
 ## [3.1.0] - 2026-09-06
 
+- Rewrote About as a structured capability summary covering single/dual
+  workflows, batch/export behavior, DQS, compatibility, and dual-wield scope.
 - Added single-weapon animation queues and explicit left/right dual-animation
   pair queues in the English and Simplified Chinese interfaces.
 - Added independently selected animated MA, CAST, FBX, and skeletal SMD

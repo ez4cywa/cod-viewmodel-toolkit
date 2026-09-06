@@ -172,6 +172,20 @@ def main():
     _assert_loaded(PRIMARY, "viewmodel_weapon_toolkit")
     _assert_loaded(LEGACY, "attach_gun")
     primary_module = _module_from_path(PRIMARY)
+    about = primary_module._about_message()
+    required_about = (
+        "Maya Viewmodel Weapon Toolkit v3.1.0",
+        "WORKFLOWS",
+        "ANIMATION & EXPORT",
+        "DQS skinning",
+        "Maya 2022+",
+        "patched CAST 1.99",
+        "DUAL-WIELD SCOPE",
+        "does not merge two different weapon",
+    )
+    missing_about = [text for text in required_about if text not in about]
+    if missing_about:
+        raise RuntimeError("About summary is incomplete: %r" % missing_about)
     if primary_module._cast_animation_import_options(False) != \
             "importAtTime=0;importReset=0;importLooping=0":
         raise RuntimeError("Static CAST animation options are incorrect")
@@ -197,6 +211,24 @@ def main():
     if chinese_core._zh_cn_entry_version != "3.1.0":
         raise RuntimeError("Chinese entry point changed the release version")
     translate_ui_text = chinese_core._zh_cn_translate_ui_text
+    localized_about = translate_ui_text(chinese_core._about_message())
+    required_localized_about = (
+        "视角模型武器工具包 v3.1.0",
+        "主要流程",
+        "动画与导出",
+        "DQS 蒙皮",
+        "兼容性",
+        "双持范围",
+        "不会合并两套不同的武器骨架",
+    )
+    missing_localized_about = [
+        text for text in required_localized_about
+        if text not in localized_about
+    ]
+    if missing_localized_about:
+        raise RuntimeError(
+            "Chinese About summary is incomplete: %r"
+            % missing_localized_about)
     if translate_ui_text("Dual-Wield Builder...") != \
             "双持构建器…":
         raise RuntimeError("Chinese menu translation is unavailable")
