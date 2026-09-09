@@ -56,11 +56,14 @@ def make_animation(module, path, end, tracks, fps=30):
         curve.SetNodeName(name)
         curve.SetKeyPropertyName(prop)
         curve.SetMode(mode)
-        curve.SetKeyFrameBuffer([0, end])
+        frames = [0] if end == 0 else [0, end]
+        curve.SetKeyFrameBuffer(frames)
         if prop == "rq":
-            curve.SetVec4KeyValueBuffer([first, last])
+            curve.SetVec4KeyValueBuffer(
+                [first] if end == 0 else [first, last])
         else:
-            curve.SetFloatKeyValueBuffer([first, last])
+            curve.SetFloatKeyValueBuffer(
+                [first] if end == 0 else [first, last])
     cast.save(str(path))
 
 
@@ -182,6 +185,55 @@ def run(directory):
         ("j_wrist_le", "tx", -4, -6, "absolute"),
         ("tag_weapon_left", "tz", 0, 1, "relative"),
         ("j_slide", "tz", 1, 3, "absolute")])
+
+    # Maya expands a zero-duration time slider range. The dual workflow must
+    # keep the one-frame animation content at frame 0 while using a legal
+    # display range and exporting exactly one sampled frame.
+    one_left = directory / "one_left.cast"
+    one_right = directory / "one_right.cast"
+    make_animation(module, one_left, 0, [
+        ("j_wrist_le", "tx", -4, -4, "absolute"),
+        ("tag_weapon_left", "tz", 0, 0, "relative"),
+        ("j_slide", "tz", 2, 2, "absolute")])
+    make_animation(module, one_right, 0, [
+        ("tag_origin", "tx", 0, 0, "absolute"),
+        ("j_wrist_ri", "tx", 4, 4, "absolute"),
+        ("tag_weapon_right", "tz", 0, 0, "relative"),
+        ("j_slide", "tz", 3, 3, "absolute")])
+    one_frame_options = module.DualWieldOptions(
+        output_dir=str(directory / "one_frame"),
+        force_new_scene=True,
+        export_smd=True,
+        export_fbx=True,
+        export_animation=True,
+        animation_mode="simultaneous",
+    )
+    one_frame = module.attach_dual_wield(
+        str(hands), str(weapon), str(one_left), str(one_right),
+        one_frame_options)
+    assert one_frame.left_clip_range == (0.0, 0.0)
+    assert one_frame.right_clip_range == (0.0, 0.0)
+    assert one_frame.frame_range == (0, 0)
+    assert tuple(one_frame.dual_verification["content_range"]) == (0.0, 0.0)
+    assert tuple(one_frame.dual_verification[
+        "scene_animation_range"]) == (0.0, 1.0)
+    assert tuple(one_frame.dual_verification["playback_range"]) == (0.0, 1.0)
+    assert not one_frame.output_errors, one_frame.output_errors
+    assert one_frame.cast_verification["animation"]["frame_range"] == [0, 0]
+    assert one_frame.smd_verification["frame_count"] == 1
+    assert one_frame.fbx_verification["frame_range"] == [0, 0]
+
+    # Scenes saved before this fix contain the degenerate metadata plus the
+    # Maya-coerced range. They must remain openable and replaceable.
+    state_node, legacy_state = module._read_dual_state()
+    legacy_state["playback_range"] = (0.0, 0.0)
+    module._write_dual_state(state_node, legacy_state)
+    cmds.playbackOptions(
+        animationStartTime=0, animationEndTime=0,
+        minTime=0, maxTime=0)
+    legacy_validation = module.validate_dual_wield()
+    assert tuple(legacy_validation["content_range"]) == (0.0, 0.0)
+    assert tuple(legacy_validation["playback_range"]) == (-1.0, 0.0)
     options = module.AttachOptions(
         output_dir=str(directory / "single"), force_new_scene=True,
         export_smd=True, export_fbx=True,

@@ -1643,7 +1643,8 @@ def _temporary_cast_import_settings(options):
 
 
 @contextmanager
-def _temporary_cast_export_settings(animation=False, model=True):
+def _temporary_cast_export_settings(
+        animation=False, model=True, bake_keyframes=None):
     """Set model/animation export flags without persisting user settings."""
     settings_sets = [
         module.sceneSettings for module in _loaded_castplugin_modules()
@@ -1651,10 +1652,12 @@ def _temporary_cast_export_settings(animation=False, model=True):
     ]
     if not settings_sets:
         raise RuntimeError("Cast plugin sceneSettings are unavailable")
+    if bake_keyframes is None:
+        bake_keyframes = bool(animation)
     requested = {
         "exportModel": bool(model),
         "exportAnim": bool(animation),
-        "bakeKeyframes": bool(animation),
+        "bakeKeyframes": bool(bake_keyframes),
     }
     originals = []
     try:
@@ -2041,6 +2044,47 @@ def _curve_time_range(curves):
     if not key_times:
         return ()
     return (float(min(key_times)), float(max(key_times)))
+
+
+def _combined_frame_range(*frame_ranges):
+    """Return the content range covered by one or more animation clips."""
+    if not frame_ranges:
+        raise RuntimeError("At least one animation frame range is required")
+    normalized = []
+    for frame_range in frame_ranges:
+        if len(frame_range) != 2:
+            raise RuntimeError("Animation frame ranges need a start and end")
+        start, end = (float(value) for value in frame_range)
+        if end < start:
+            raise RuntimeError("Animation frame range ends before it starts")
+        normalized.append((start, end))
+    return (
+        min(frame_range[0] for frame_range in normalized),
+        max(frame_range[1] for frame_range in normalized),
+    )
+
+
+def _visible_playback_range(content_range):
+    """Return a legal Maya time-slider range for an animation content range."""
+    start, end = _combined_frame_range(content_range)
+    if end == start:
+        end = start + 1.0
+    return (start, end)
+
+
+def _set_scene_animation_range(content_range):
+    """Give Maya a legal range while callers retain exact content bounds."""
+    content_range = _combined_frame_range(content_range)
+    playback_range = _visible_playback_range(content_range)
+    cmds.playbackOptions(
+        animationStartTime=playback_range[0],
+        animationEndTime=playback_range[1],
+        minTime=playback_range[0],
+        maxTime=playback_range[1],
+        loop="once",
+    )
+    cmds.currentTime(content_range[0], edit=True)
+    return playback_range
 
 
 def _apply_reference_pose_compensation(
@@ -2878,12 +2922,45 @@ def validate_dual_wield():
         float(cmds.playbackOptions(query=True, minTime=True)),
         float(cmds.playbackOptions(query=True, maxTime=True)),
     )
-    expected_range = tuple(float(value) for value in state["playback_range"])
-    if any(abs(actual - expected) > 1e-6
-           for actual, expected in zip(playback_range, expected_range)):
+    scene_animation_range = (
+        float(cmds.playbackOptions(query=True, animationStartTime=True)),
+        float(cmds.playbackOptions(query=True, animationEndTime=True)),
+    )
+    content_range = _combined_frame_range(
+        state["left_clip_range"], state["right_clip_range"])
+    expected_playback_range = _visible_playback_range(content_range)
+    stored_playback_range = tuple(
+        float(value) for value in state["playback_range"])
+
+    def ranges_match(actual, expected):
+        return all(abs(value - wanted) <= 1e-6
+                   for value, wanted in zip(actual, expected))
+
+    legacy_single_frame = (
+        content_range[0] == content_range[1] and
+        ranges_match(stored_playback_range, content_range))
+    if not (ranges_match(stored_playback_range, expected_playback_range) or
+            legacy_single_frame):
+        raise RuntimeError(
+            "Dual playback metadata %s does not match clip range %s"
+            % (stored_playback_range, content_range))
+    allowed_playback_ranges = [expected_playback_range]
+    if legacy_single_frame:
+        # Maya 2025 coerced the old min=max setting to (frame - 1, frame).
+        allowed_playback_ranges.extend((
+            content_range,
+            (content_range[0] - 1.0, content_range[1]),
+        ))
+    if not any(ranges_match(playback_range, expected)
+               for expected in allowed_playback_ranges):
         raise RuntimeError(
             "Dual playback range changed: expected %s, got %s"
-            % (expected_range, playback_range))
+            % (expected_playback_range, playback_range))
+    if not any(ranges_match(scene_animation_range, expected)
+               for expected in allowed_playback_ranges):
+        raise RuntimeError(
+            "Dual animation range changed: expected %s, got %s"
+            % (expected_playback_range, scene_animation_range))
     actual_joint_count = len(cmds.ls(type="joint") or [])
     actual_mesh_count = len([
         node for node in cmds.ls(type="mesh", long=True) or []
@@ -2952,6 +3029,8 @@ def validate_dual_wield():
         "animation_mode": state["animation_mode"],
         "shared_hands_source": state["shared_hands_source"],
         "playback_range": playback_range,
+        "scene_animation_range": scene_animation_range,
+        "content_range": content_range,
         "left_clip_range": tuple(state["left_clip_range"]),
         "right_clip_range": tuple(state["right_clip_range"]),
         "left": left,
@@ -3103,10 +3182,9 @@ def attach_dual_wield(
         float(right_source_range[0]) + right_offset,
         float(right_source_range[1]) + right_offset,
     )
-    playback_range = (
-        min(left_clip_range[0], right_clip_range[0]),
-        max(left_clip_range[1], right_clip_range[1]),
-    )
+    animation_range = _combined_frame_range(
+        left_clip_range, right_clip_range)
+    playback_range = _visible_playback_range(animation_range)
 
     state = {
         "schema_version": 1,
@@ -3194,14 +3272,7 @@ def attach_dual_wield(
         )
     state["left_import_report"] = left_import_report
     state["right_import_report"] = right_import_report
-    cmds.playbackOptions(
-        animationStartTime=playback_range[0],
-        minTime=playback_range[0],
-        animationEndTime=playback_range[1],
-        maxTime=playback_range[1],
-        loop="once",
-    )
-    cmds.currentTime(playback_range[0], edit=True)
+    _set_scene_animation_range(animation_range)
     left_verification = _validate_dual_side(state, "left")
     right_verification = _validate_dual_side(state, "right")
     result = DualWieldResult(
@@ -3249,7 +3320,7 @@ def attach_dual_wield(
         reference_pose_compensation=reference_pose,
         animated_outputs=options.export_animation,
         skinning_method="dualQuaternion" if options.export_animation else "",
-        frame_range=playback_range,
+        frame_range=animation_range,
         framerate=preflight["left_animation"]["framerate"],
         warnings=warnings,
     )
@@ -3386,10 +3457,8 @@ def replace_dual_animation(side, animation_path):
         state["%s_clip_range" % side] = new_range
         other_side = "right" if side == "left" else "left"
         other_range = tuple(state["%s_clip_range" % other_side])
-        playback_range = (
-            min(new_range[0], float(other_range[0])),
-            max(new_range[1], float(other_range[1])),
-        )
+        animation_range = _combined_frame_range(new_range, other_range)
+        playback_range = _visible_playback_range(animation_range)
         state["playback_range"] = playback_range
         state["%s_import_report" % side] = report
         updated_preflight = preflight_dual_inputs(
@@ -3410,14 +3479,7 @@ def replace_dual_animation(side, animation_path):
             list(state.get("structural_warnings", [])) +
             list(updated_preflight["warnings"]))
         _write_dual_state(state_node, state)
-        cmds.playbackOptions(
-            animationStartTime=playback_range[0],
-            minTime=playback_range[0],
-            animationEndTime=playback_range[1],
-            maxTime=playback_range[1],
-            loop="once",
-        )
-        cmds.currentTime(playback_range[0], edit=True)
+        _set_scene_animation_range(animation_range)
         validation = validate_dual_wield()
         if isinstance(_LAST_RESULT, DualWieldResult):
             setattr(_LAST_RESULT, "%s_animation_path" % side,
@@ -3430,6 +3492,7 @@ def replace_dual_animation(side, animation_path):
             _LAST_RESULT.reference_pose_compensation = state[
                 "reference_pose_compensation"]
             _LAST_RESULT.warnings = list(state["warnings"])
+            _LAST_RESULT.frame_range = animation_range
             _LAST_RESULT.dual_verification = validation
         report = dict(report)
         report["playback_range"] = playback_range
@@ -3474,10 +3537,10 @@ def batch_attach(viewhands_path, weapon_paths, options=None):
 # Animated outputs and single/dual animation queues.
 # ---------------------------------------------------------------------------
 
-def _animation_export_range():
-    values = (
-        float(cmds.playbackOptions(query=True, minTime=True)),
-        float(cmds.playbackOptions(query=True, maxTime=True)),
+def _animation_export_range(content_range=()):
+    values = tuple(content_range) if content_range else (
+        float(cmds.playbackOptions(query=True, animationStartTime=True)),
+        float(cmds.playbackOptions(query=True, animationEndTime=True)),
     )
     if values[0] < 0 or values[1] < values[0] or any(
             value != int(value) for value in values):
@@ -3530,11 +3593,14 @@ def export_cast_animation(path, result):
     if bind_model is None:
         raise RuntimeError(getattr(result, "_cast_bind_error", "") or
                            "Animation CAST export needs its original assembled bind model")
-    with _temporary_cast_export_settings(animation=True, model=False):
+    bake_keyframes = result.frame_range[1] > result.frame_range[0]
+    with _temporary_cast_export_settings(
+            animation=True, model=False, bake_keyframes=bake_keyframes):
         with _temporary_baked_joint_animation(result.frame_range):
             cmds.file(
                 path, force=True, type=cast_translator_name(), exportAll=True,
-                options="exportModel=0;exportAnim=1;bakeKeyframes=1")
+                options="exportModel=0;exportAnim=1;bakeKeyframes=%d"
+                % int(bake_keyframes))
     combined = _castplugin_module().Cast.load(path)
     serializer = sys.modules[_castplugin_module().Cast.__module__]
     root = combined.Roots()[0]
@@ -3700,7 +3766,7 @@ def export_smd_animation(path, frame_range):
 def _write_animation_outputs(result, options, allocate=True):
     """Write selected animated formats and record independent format failures."""
     validate_output_options(options)
-    result.frame_range = _animation_export_range()
+    result.frame_range = _animation_export_range(result.frame_range)
     result.framerate = float(_castplugin_module().utilityUnitToFramerate(
         OpenMaya.MTime.uiUnit()))
     if allocate:
@@ -3846,6 +3912,8 @@ def _run_animation_queue(viewhands_path, weapon_path, paths, options,
                             target_joint=options.target_joint)
                         if not result.animation_verification["anim_curve_count"]:
                             raise RuntimeError("Animation contains no matching joint tracks")
+                        result.frame_range = tuple(
+                            result.animation_verification["animation_range"])
                         _write_animation_outputs(result, options)
                     item.update(
                         status=("failed" if len(result.output_errors) ==
@@ -3917,14 +3985,7 @@ def _set_playback_range_from_curves(curves):
             "Imported animation created no usable keyframes")
     start = float(min(key_times))
     end = float(max(key_times))
-    cmds.playbackOptions(
-        animationStartTime=start,
-        minTime=start,
-        animationEndTime=end,
-        maxTime=end,
-    )
-    cmds.currentTime(start, edit=True)
-    return (start, end)
+    return _set_scene_animation_range((start, end))
 
 
 def import_animation_file(animation_path,
@@ -3975,10 +4036,12 @@ def import_animation_file(animation_path,
                 anim_curves.append(node)
         except Exception:
             pass
+    animation_range = _curve_time_range(anim_curves)
     playback_range = _set_playback_range_from_curves(anim_curves)
 
     if _LAST_RESULT and _LAST_RESULT.source_uuid == source_uuid:
         _LAST_RESULT.animation_path = animation_path
+        _LAST_RESULT.frame_range = animation_range
         _LAST_RESULT.translation_protected = bool(protect_translation)
         _LAST_RESULT.source_node = current["source_node"]
         _LAST_RESULT.target_node = current["target_node"]
@@ -3990,6 +4053,7 @@ def import_animation_file(animation_path,
         "framerate": framerate,
         "new_node_count": len(new_nodes),
         "anim_curve_count": len(anim_curves),
+        "animation_range": animation_range,
         "playback_range": playback_range,
         "translation_protected": bool(protect_translation),
         "routed_hand_node": _node_from_uuid(hand_uuid),

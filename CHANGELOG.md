@@ -4,6 +4,9 @@ All notable changes to this project are documented here.
 
 ## [3.1.0] - 2026-09-06
 
+- Fixed simultaneous one-frame dual animations being rejected after Maya
+  expanded the zero-duration time-slider range, while keeping CAST, SMD, and
+  FBX exports limited to the real animation frame.
 - Rewrote About as a structured capability summary covering single/dual
   workflows, batch/export behavior, DQS, compatibility, and dual-wield scope.
 - Added single-weapon animation queues and explicit left/right dual-animation
