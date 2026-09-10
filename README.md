@@ -2,11 +2,28 @@
 
 [简体中文](README.zh-CN.md)
 
-Maya Viewmodel Weapon Toolkit 3.1.0 assembles Call of Duty-style CAST
-viewhands and weapon models in Maya 2022 or newer running in Python 3 mode.
-It supports single-weapon setups, duplicated-weapon dual wield,
-collision-safe animation import, validation, and independently configured
-model and batch animation exports. The verification target is Maya 2025 for Windows.
+Maya Viewmodel Weapon Toolkit turns CAST viewhands, weapons, and animations
+into assembled first-person scenes and export batches. Build single-weapon
+or duplicated-weapon dual-wield setups, compose left/right animations, and
+export MA, CAST, SMD, or FBX with independent output folders and JSON reports.
+
+Version **3.2.0** bundles the project-patched **CAST 2.00** translator and
+provides English and Simplified Chinese interfaces with resizable forms,
+grouped settings, descriptive control labels, and visible keyboard focus.
+It targets Maya 2022+ in Python 3 mode; runtime verification uses Maya 2025
+for Windows.
+
+[Download 3.2.0](https://github.com/ez4cywa/maya-viewmodel-weapon-toolkit/releases/tag/3.2.0)
+· [What's new](docs/RELEASE_NOTES_3.2.0.md)
+
+## New in 3.2.0
+
+- CAST 2.00 name normalization is shared by preflight and animation routing;
+  ambiguous joint names are rejected before import.
+- Scrollable single/dual forms keep primary actions visible, with a 10-point
+  minimum control font and automatic scrolling to focused fields.
+- Disabled output folders retain their values; empty queues explain how to
+  begin. Both language editions share the same implementation.
 
 ## Features
 
@@ -24,8 +41,9 @@ model and batch animation exports. The verification target is Maya 2025 for Wind
 - Choose formats and output folders independently.
 - Batch-export multiple single-weapon animations or explicit left/right dual
   animation pairs, with progress, cancellation, and per-item reports.
+- Use DQS skinning for toolkit animation batch exports.
 - Write a JSON verification manifest next to every result.
-- Include the project-patched CAST Maya translator based on upstream v1.99,
+- Include the project-patched CAST Maya translator based on upstream v2.00,
   with batch-mode, per-call option, and missing-UV export fixes.
 - Choose the English entry point or the separately packaged Simplified
   Chinese UI; both editions use the same core implementation.
@@ -38,7 +56,7 @@ model and batch animation exports. The verification target is Maya 2025 for Wind
   Windows-only `os.startfile` integration; core Maya workflows are not yet
   certified on macOS or Linux.
 - The release archives include a project-patched Maya translator based on
-  [dtzxporter/cast v1.99](https://github.com/dtzxporter/cast/releases/tag/v1.99).
+  [dtzxporter/cast v2.00](https://github.com/dtzxporter/cast/releases/tag/v2.00).
   No separate CAST download is required when installing from a release ZIP.
 - CAST files whose skeleton names follow the conventions described below.
 
@@ -55,7 +73,7 @@ baseline, hashes, and local changes.
 2. Choose one release edition and copy the complete contents of its
    `plug-ins` directory into a directory on `MAYA_PLUG_IN_PATH`, such as your
    Maya user `plug-ins` directory. Both editions include the patched CAST
-   1.99 translator:
+   2.00 translator:
    - English: `viewmodel_weapon_toolkit.py`.
    - Simplified Chinese: `viewmodel_weapon_toolkit.py` plus
      `viewmodel_weapon_toolkit_zh_CN.py` (the first file is the shared core).
@@ -180,8 +198,8 @@ the remaining animation is still imported.
 
 | Support level | Environment | Status |
 | --- | --- | --- |
-| Minimum expected | Maya 2022, Python 3.7.7, patched CAST 1.99 | Source syntax and required Maya APIs are compatible; asset-based workflows have not been regression-tested on Maya 2022. |
-| Release verified | Maya 2025, Python 3.11.4, patched CAST 1.99, Windows | Single-weapon, dual-wield, localization, and export release target. |
+| Minimum expected | Maya 2022, Python 3.7.7, patched CAST 2.00 | Source syntax and required Maya APIs are compatible; asset-based workflows have not been regression-tested on Maya 2022. |
+| Release verified | Maya 2025, Python 3.11.4, patched CAST 2.00, Windows | Single-weapon, dual-wield, localization, and export release target. |
 
 Maya 2022 on Windows or Linux can also be launched in Python 2 mode; this
 toolkit must run in Python 3 mode. Maya 2021 and older are unsupported. The
@@ -189,7 +207,7 @@ minimum-version statement is a compatibility assessment, not a claim that
 the complete asset regression suite was executed in Maya 2022.
 
 The old filename, command, option variables, and dual-scene metadata remain
-supported in 3.1.0. This allows scenes and preferences created by Attach Gun to
+supported in 3.2.0. This allows scenes and preferences created by Attach Gun to
 continue working after the product rename.
 
 ## Testing
@@ -202,12 +220,16 @@ python tests/verify_vendored_cast.py
 mayapy tests/verify_plugin_identity.py
 mayapy tests/verify_reference_pose_compensation.py
 mayapy tests/verify_batch_animation_export.py
+mayapy tests/verify_cast_v200.py
 ```
 
 Batch regression tests generate synthetic CAST fixtures, check both dual
 playback modes and all four outputs, and compare FBX round-trip samples.
 Game assets are not included in the public repository.
 See [batch verification notes](docs/BATCH_ANIMATION_VERIFICATION.md) for coverage.
+See [3.2.0 verification](docs/VERIFICATION_3.2.0.md) for CAST 2.00 and native UI checks.
+
+Build both language archives with `python scripts/build_release.py <output-dir>`.
 
 ## License
 

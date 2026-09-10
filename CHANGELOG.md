@@ -2,6 +2,21 @@
 
 All notable changes to this project are documented here.
 
+## [3.2.0] - 2026-09-11
+
+- Updated the bundled Maya CAST translator to upstream v2.00, retaining
+  batch-mode support, UV fallback, and per-operation option isolation.
+- Matched model and animation preflight names to CAST v2.00 normalization;
+  fixed hyphen and curve-mode override handling and reject name collisions.
+- Resolve the bundled translator in both source checkouts and release packages.
+- Unified temporary CAST preference handling and shared native UI builders.
+- Grouped source files, joint mapping, output formats, and scene actions;
+  added resizable scrolling forms with persistent primary actions.
+- Added descriptive accessible names, visible keyboard focus, larger controls,
+  wrapping labels, disabled unselected output folders, and queue empty feedback
+  in both English and Simplified Chinese.
+- Added CAST v2.00 special-name integration and interactive UI regression checks.
+
 ## [3.1.0] - 2026-09-06
 
 - Fixed simultaneous one-frame dual animations being rejected after Maya

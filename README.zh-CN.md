@@ -2,10 +2,22 @@
 
 [English](README.md)
 
-Maya Viewmodel Weapon Toolkit 3.1.0 是面向 Maya 2022 或更高版本、并须以
-Python 3 模式运行的第一人称武器装配与动画工具。它可导入 CAST 手臂和武器
-模型，支持单武器、同一武器复制双持、左右动画合成与替换、安全拖放动画、
-结构验证及动画批量导出。验证目标为 Windows 版 Maya 2025。
+Maya Viewmodel Weapon Toolkit 将 CAST 手臂、武器和动画组合成第一人称场景，
+并完成批量导出。支持单武器、同一武器复制双持和左右动画合成，可分别设置
+MA、CAST、SMD、FBX 的输出目录，并生成 JSON 验证报告。
+
+**3.2.0** 内置项目补丁版 **CAST 2.00**，提供英文和简体中文界面。窗口支持
+缩放与滚动，设置按用途分组，控件具有描述性标签和清晰的键盘焦点。
+适用于 Python 3 模式的 Maya 2022+；运行验证环境为 Windows 版 Maya 2025。
+
+[下载 3.2.0](https://github.com/ez4cywa/maya-viewmodel-weapon-toolkit/releases/tag/3.2.0)
+· [更新说明](docs/RELEASE_NOTES_3.2.0.md)
+
+## 3.2.0 更新重点
+
+- 预检与动画路由统一适配 CAST 2.00 的名称清理规则；有歧义的关节名称会在导入前报错。
+- 单武器和双持窗口可滚动，主要操作保持可见；控件字号不小于 10 点，焦点字段自动滚入可见区域。
+- 未勾选格式的输出目录保留原值；空队列提示下一步操作。中英文版本复用同一套实现。
 
 ## 主要功能
 
@@ -22,7 +34,8 @@ Python 3 模式运行的第一人称武器装配与动画工具。它可导入 C
 - 可独立选择是否输出 `.ma`、`.cast`、`.smd`、`.fbx`。
 - 每种格式可选择不同输出目录，并自动生成 JSON 验证清单。
 - 单武器支持多个动画排队导出；双持支持多个左右动画配对，提供进度、取消和逐项报告。
-- 发布包内置基于上游 v1.99 的项目补丁版 CAST Maya 转换器，包含 Batch
+- 工具包动画批量导出使用 DQS（双四元数）蒙皮。
+- 发布包内置基于上游 v2.00 的项目补丁版 CAST Maya 转换器，包含 Batch
   模式、单次调用选项和缺失 UV 导出修复。
 - 发布包同时提供英文版和简体中文版；两个版本复用同一套核心逻辑。
 
@@ -33,7 +46,7 @@ Python 3 模式运行的第一人称武器装配与动画工具。它可导入 C
 - Windows 是目前已验证的操作系统。**打开输出目录** 使用 Windows 专用的
   `os.startfile`；核心 Maya 工作流尚未在 macOS 或 Linux 上完成认证。
 - Release 压缩包已包含基于
-  [dtzxporter/cast v1.99](https://github.com/dtzxporter/cast/releases/tag/v1.99)
+  [dtzxporter/cast v2.00](https://github.com/dtzxporter/cast/releases/tag/v2.00)
   的项目补丁版 Maya 转换器，从压缩包安装时无需另行下载 CAST。
 - 骨骼命名符合下文约定的 CAST 文件。
 
@@ -46,7 +59,7 @@ Python 3 模式运行的第一人称武器装配与动画工具。它可导入 C
 1. 备份目标 Maya 插件目录中已有的 `castplugin.py` 和 `cast.py`。不要复制
    或覆盖 `cast.cfg`，其中保存了个人 CAST 设置。
 2. 选择一个 Release 版本，把其中 `plug-ins` 目录的全部文件复制到 Maya
-   的 `MAYA_PLUG_IN_PATH` 目录。两个版本均包含补丁版 CAST 1.99：
+   的 `MAYA_PLUG_IN_PATH` 目录。两个版本均包含补丁版 CAST 2.00：
    - 英文版：`viewmodel_weapon_toolkit.py`。
    - 简体中文版：同时复制 `viewmodel_weapon_toolkit.py` 和
      `viewmodel_weapon_toolkit_zh_CN.py`；前者是共享核心。
@@ -152,14 +165,14 @@ Python 接口：`batch_export_animations(hands, weapon, animation_paths, options
 
 | 支持级别 | 环境 | 状态 |
 | --- | --- | --- |
-| 预期最低版本 | Maya 2022、Python 3.7.7、补丁版 CAST 1.99 | 源码语法和所需 Maya API 兼容；尚未在 Maya 2022 中执行基于实际资产的完整回归。 |
-| 发布验证版本 | Maya 2025、Python 3.11.4、补丁版 CAST 1.99、Windows | 单武器、双持、中文界面和导出的发布验证目标。 |
+| 预期最低版本 | Maya 2022、Python 3.7.7、补丁版 CAST 2.00 | 源码语法和所需 Maya API 兼容；尚未在 Maya 2022 中执行基于实际资产的完整回归。 |
+| 发布验证版本 | Maya 2025、Python 3.11.4、补丁版 CAST 2.00、Windows | 单武器、双持、中文界面和导出的发布验证目标。 |
 
 Windows 或 Linux 版 Maya 2022 也可以用 Python 2 模式启动；本工具包必须在
 Python 3 模式下运行。Maya 2021 及更早版本不受支持。最低版本结论来自代码
 语法与 API 兼容性判断，不代表已在 Maya 2022 中运行完整资产回归。
 
-3.1.0 保留旧文件名入口、`attachGun` 命令、OptionVar 和双持场景元数据，原有
+3.2.0 保留旧文件名入口、`attachGun` 命令、OptionVar 和双持场景元数据，原有
 场景与 Maya 偏好可以继续使用。
 
 ## 测试
@@ -171,11 +184,15 @@ python tests/verify_vendored_cast.py
 mayapy tests/verify_plugin_identity.py
 mayapy tests/verify_reference_pose_compensation.py
 mayapy tests/verify_batch_animation_export.py
+mayapy tests/verify_cast_v200.py
 ```
 
 批量回归会自动生成合成 CAST 样本，检查双持两种播放模式、四种输出及 FBX
 重新导入后的逐帧结果。公开仓库不包含游戏资产。
 具体覆盖范围见[批量导出验证记录](docs/BATCH_ANIMATION_VERIFICATION.md)。
+CAST 2.00 与原生界面检查见 [3.2.0 验证记录](docs/VERIFICATION_3.2.0.md)。
+
+使用 `python scripts/build_release.py <output-dir>` 构建两个语言的安装包。
 
 ## 许可证
 

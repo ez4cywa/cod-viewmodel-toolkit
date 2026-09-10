@@ -24,7 +24,7 @@ Output formats and their folders are independently selectable: Maya ASCII
 (``.ma``), combined model Cast (``.cast``), Source model (``.smd``), and FBX
 (``.fbx``). A JSON verification manifest is always written to the common
 output folder. Release packages include a project-patched Maya Cast plugin
-based on official v1.99; a compatible v1.99 or newer translator can also be
+based on official v2.00; a compatible v1.99 or newer translator can also be
 used.
 
 Single/dual animation queues export selected animated formats with DQS
@@ -87,7 +87,7 @@ COMMAND_NAME = "viewmodelWeaponToolkit"
 LEGACY_COMMAND_NAME = "attachGun"
 WINDOW_NAME = "ViewmodelWeaponToolkitWindow"
 DUAL_WINDOW_NAME = "ViewmodelWeaponToolkitDualWindow"
-VERSION = "3.1.0"
+VERSION = "3.2.0"
 
 VIEWHANDS_OPTVAR = "attachGun_viewhandsPath"
 OUTPUT_DIR_OPTVAR = "attachGun_outputDir"
@@ -415,8 +415,7 @@ def ensure_cast_plugin():
             "%s as a Maya plugin so it can register the official "
             "Cast translator through its batch fallback." % PRODUCT_NAME)
 
-    adjacent = os.path.join(_toolkit_module_dir(), "castplugin.py")
-    candidate = adjacent if os.path.isfile(adjacent) else "castplugin.py"
+    candidate = _bundled_cast_plugin_path() or "castplugin.py"
     try:
         cmds.loadPlugin(candidate, quiet=True)
     except Exception as exc:
@@ -439,9 +438,9 @@ def _cast_plugin_path():
         if path and os.path.isfile(path):
             return os.path.normpath(os.path.abspath(path))
 
-    adjacent = os.path.join(_toolkit_module_dir(), "castplugin.py")
-    if os.path.isfile(adjacent):
-        return os.path.normpath(os.path.abspath(adjacent))
+    bundled = _bundled_cast_plugin_path()
+    if bundled:
+        return bundled
 
     plugin_dir = os.path.join(
         os.path.dirname(os.path.abspath(sys.executable)), "plug-ins")
@@ -456,6 +455,20 @@ def _toolkit_module_dir():
     path = _TOOLKIT_PLUGIN_PATH or globals().get("__file__", "")
     if path:
         return os.path.dirname(os.path.abspath(path))
+    return ""
+
+
+def _bundled_cast_plugin_path():
+    """Resolve release-adjacent or source-checkout CAST before Maya's copy."""
+    directory = _toolkit_module_dir()
+    if not directory:
+        return ""
+    for path in (
+            os.path.join(directory, "castplugin.py"),
+            os.path.join(os.path.dirname(directory), "third_party",
+                         "cast", "castplugin.py")):
+        if os.path.isfile(path):
+            return os.path.normpath(os.path.abspath(path))
     return ""
 
 
@@ -597,12 +610,19 @@ def _short_name(name):
     return str(name).split("|")[-1].split(":")[-1]
 
 
+def _cast_import_name(module, name):
+    """Mirror the active translator's name normalization during preflight."""
+    sanitize = getattr(module, "utilitySanitize", None)
+    return str(sanitize(name) or "") if sanitize else str(name or "")
+
+
 def _cast_bone_inventory(path):
     """Read skeleton and mesh health with cast.py; do not modify the scene."""
     module = _castplugin_module()
     cast_file = module.Cast.load(path)
     bone_names = []
     bone_records = []
+    imported_name_sources = {}
     model_count = 0
     animation_count = 0
     skeleton_count = 0
@@ -623,25 +643,36 @@ def _cast_bone_inventory(path):
                 skeleton_count += 1
                 bones = list(skeleton.Bones())
                 for bone_index, bone in enumerate(bones):
-                    bone_name = str(bone.Name())
+                    bone_name = _cast_import_name(module, bone.Name())
+                    source_name = str(bone.Name() or "")
+                    if not bone_name:
+                        raise RuntimeError("CAST skeleton contains an empty joint name")
+                    previous = imported_name_sources.setdefault(bone_name, source_name)
+                    if previous != source_name:
+                        raise RuntimeError(
+                            "CAST joint names %r and %r both import as %r"
+                            % (previous, source_name, bone_name))
                     parent_index = int(bone.ParentIndex())
                     parent_name = None
                     ancestor_names = []
                     local_position = bone.LocalPosition()
                     if 0 <= parent_index < len(bones):
-                        parent_name = str(bones[parent_index].Name())
+                        parent_name = _cast_import_name(
+                            module, bones[parent_index].Name())
                     visited = set()
                     ancestor_index = parent_index
                     while (0 <= ancestor_index < len(bones)
                            and ancestor_index not in visited):
                         visited.add(ancestor_index)
                         ancestor = bones[ancestor_index]
-                        ancestor_names.append(str(ancestor.Name()))
+                        ancestor_names.append(_cast_import_name(
+                            module, ancestor.Name()))
                         ancestor_index = int(ancestor.ParentIndex())
                     ancestor_names.reverse()
                     bone_names.append(bone_name)
                     bone_records.append({
                         "name": bone_name,
+                        "source_name": str(bone.Name()),
                         "index": bone_index,
                         "parent_index": parent_index,
                         "parent_name": parent_name,
@@ -810,7 +841,7 @@ def _cast_animation_inventory(path, allow_models=False):
     animation = animations[0]
     curve_mode_overrides = [
         {
-            "node": str(override.NodeName() or ""),
+            "node": _cast_import_name(module, override.NodeName()),
             "mode": str(override.Mode() or "absolute"),
             "translation": bool(override.OverrideTranslationCurves()),
             "rotation": bool(override.OverrideRotationCurves()),
@@ -825,7 +856,7 @@ def _cast_animation_inventory(path, allow_models=False):
         values = tuple(float(value) for value in curve.KeyValueBuffer() or [])
         all_frames.extend(frames)
         curve_records.append({
-            "node": str(curve.NodeName()),
+            "node": _cast_import_name(module, curve.NodeName()),
             "property": str(curve.KeyPropertyName()),
             "frames": frames,
             "values": values,
@@ -1612,67 +1643,44 @@ def _try_registered_smd_export(path, source_joint, target_joint):
 
 
 @contextmanager
-def _temporary_cast_import_settings(options):
-    """Disable imported IK/constraints without persisting setting changes."""
+def _temporary_cast_settings(requested, required=False):
+    """Scope translator preferences to one operation, including failure paths."""
     settings_sets = [
         module.sceneSettings for module in _loaded_castplugin_modules()
         if isinstance(getattr(module, "sceneSettings", None), dict)
     ]
-    if not settings_sets:
-        yield
-        return
-
-    requested = {
-        "importIK": not options.disable_import_ik,
-        "importConstraints": not options.disable_import_constraints,
-    }
+    if required and not settings_sets:
+        raise RuntimeError("Cast plugin sceneSettings are unavailable")
     originals = []
     try:
         for settings in settings_sets:
-            original = {}
-            for name, value in requested.items():
-                if name in settings:
-                    original[name] = settings[name]
-                    settings[name] = value
+            original = {name: settings[name] for name in requested
+                        if name in settings}
             originals.append((settings, original))
+            settings.update({name: requested[name] for name in original})
         yield
     finally:
         for settings, original in reversed(originals):
-            for name, value in original.items():
-                settings[name] = value
+            settings.update(original)
 
 
-@contextmanager
+def _temporary_cast_import_settings(options):
+    """Disable imported IK/constraints without persisting setting changes."""
+    return _temporary_cast_settings({
+        "importIK": not options.disable_import_ik,
+        "importConstraints": not options.disable_import_constraints,
+    })
+
+
 def _temporary_cast_export_settings(
         animation=False, model=True, bake_keyframes=None):
     """Set model/animation export flags without persisting user settings."""
-    settings_sets = [
-        module.sceneSettings for module in _loaded_castplugin_modules()
-        if isinstance(getattr(module, "sceneSettings", None), dict)
-    ]
-    if not settings_sets:
-        raise RuntimeError("Cast plugin sceneSettings are unavailable")
-    if bake_keyframes is None:
-        bake_keyframes = bool(animation)
-    requested = {
+    return _temporary_cast_settings({
         "exportModel": bool(model),
         "exportAnim": bool(animation),
-        "bakeKeyframes": bool(bake_keyframes),
-    }
-    originals = []
-    try:
-        for settings in settings_sets:
-            original = {}
-            for name, value in requested.items():
-                if name in settings:
-                    original[name] = settings[name]
-                    settings[name] = value
-            originals.append((settings, original))
-        yield
-    finally:
-        for settings, original in reversed(originals):
-            for name, value in original.items():
-                settings[name] = value
+        "bakeKeyframes": bool(animation if bake_keyframes is None
+                              else bake_keyframes),
+    }, required=True)
 
 
 # ---------------------------------------------------------------------------
@@ -1991,34 +1999,12 @@ def _route_dual_animation_names(state, side, selected_hand_names):
                 % "; ".join(restore_errors))
 
 
-@contextmanager
 def _temporary_cast_animation_settings(import_at_time=False):
-    settings_sets = [
-        module.sceneSettings for module in _loaded_castplugin_modules()
-        if isinstance(getattr(module, "sceneSettings", None), dict)
-    ]
-    if not settings_sets:
-        yield
-        return
-    requested = {
+    return _temporary_cast_settings({
         "importAtTime": bool(import_at_time),
         "importReset": False,
         "importLooping": False,
-    }
-    originals = []
-    try:
-        for settings in settings_sets:
-            original = {}
-            for name, value in requested.items():
-                if name in settings:
-                    original[name] = settings[name]
-                    settings[name] = value
-            originals.append((settings, original))
-        yield
-    finally:
-        for settings, original in reversed(originals):
-            for name, value in original.items():
-                settings[name] = value
+    })
 
 
 def _cast_animation_import_options(import_at_time=False):
@@ -4387,9 +4373,316 @@ def save_current_result():
 # UI helpers.
 # ---------------------------------------------------------------------------
 
+# Shared native Maya controls keep both editions and workflows consistent.
+_UI_FEEDBACK_CONTROL = "viewmodelWeaponToolkitFeedback"
+_UI_FIELD_LABELS = {}
+_UI_WRAP_TEXTS = {}
+_UI_SECTIONS = []
+_UI_QT = None
+
+
+def _ui_translate(text):
+    return globals().get("_zh_cn_translate_ui_text", lambda value: value)(text)
+
+
+def _ui_qt():
+    global _UI_QT
+    if _UI_QT is None:
+        try:
+            from PySide6 import QtCore, QtWidgets
+            from shiboken6 import wrapInstance
+        except ImportError:
+            from PySide2 import QtCore, QtWidgets
+            from shiboken2 import wrapInstance
+        _UI_QT = (QtCore, QtWidgets, wrapInstance)
+    return _UI_QT
+
+
+def _ui_widget(control):
+    _, QtWidgets, wrap = _ui_qt()
+    pointer = (OpenMayaUI.MQtUtil.findControl(control) or
+               OpenMayaUI.MQtUtil.findLayout(control) or
+               OpenMayaUI.MQtUtil.findWindow(control))
+    if not pointer:
+        return None
+    widget = wrap(int(pointer), QtWidgets.QWidget)
+    interactive = (QtWidgets.QAbstractButton, QtWidgets.QLineEdit,
+                   QtWidgets.QComboBox, QtWidgets.QAbstractItemView,
+                   QtWidgets.QPlainTextEdit)
+    if not isinstance(widget, interactive):
+        children = [child for child in widget.findChildren(QtWidgets.QWidget)
+                    if isinstance(child, interactive)]
+        if len(children) == 1:
+            return children[0]
+    return widget
+
+
+def _ui_text(label, bold=False):
+    control = cmds.text(label=label, align="left", wordWrap=True, width=1,
+                        height=22, font="boldLabelFont" if bold else "plainLabelFont")
+    _UI_WRAP_TEXTS[control] = label
+    return control
+
+
+def _ui_reflow_labels():
+    """Maya labels need an explicit height after their wrapping width changes."""
+    QtCore, _, _ = _ui_qt()
+    for control, label in _UI_WRAP_TEXTS.items():
+        if not cmds.control(control, exists=True):
+            continue
+        widget = _ui_widget(control)
+        if widget:
+            width = max(120, widget.width())
+            bounds = widget.fontMetrics().boundingRect(
+                QtCore.QRect(0, 0, width, 10000),
+                QtCore.Qt.TextWordWrap, _ui_translate(label))
+            cmds.text(control, edit=True, height=max(22, bounds.height() + 4))
+    # Maya caches column/frame heights when a wrapped label becomes shorter.
+    for frame, column in _UI_SECTIONS:
+        children = cmds.columnLayout(column, query=True, childArray=True) or []
+        height = sum(cmds.control(child, query=True, height=True)
+                     for child in children)
+        height += max(0, len(children) - 1) * 8 + 2
+        cmds.columnLayout(column, edit=True, height=height)
+        if not cmds.frameLayout(frame, query=True, collapse=True):
+            cmds.frameLayout(frame, edit=True, height=height + 45)
+
+
+@contextmanager
+def _ui_section(label, collapsed=False):
+    parent = cmds.setParent(query=True)
+    frame = cmds.frameLayout(label=label, collapsable=True, collapse=collapsed,
+                             marginWidth=10, marginHeight=10,
+                             expandCommand=lambda *_: _ui_reflow_labels())
+    column = cmds.columnLayout(adjustableColumn=True, rowSpacing=8)
+    _UI_SECTIONS.append((frame, column))
+    try:
+        yield
+    finally:
+        cmds.setParent(parent)
+
+
+def _ui_path_row(label, field_name, value, callback=None):
+    label_control = _ui_text(label)
+    cmds.rowLayout(numberOfColumns=2, adjustableColumn=1,
+                   columnWidth2=(1, 100), columnAttach2=("both", "both"),
+                   columnOffset2=(0, 6))
+    cmds.textField(field_name, text=value, height=32, width=1, annotation=label)
+    browse = cmds.button(
+        label="Browse...", height=32,
+        annotation="Browse: " + label,
+        command=callback or (lambda *_: _browse_cast(field_name)))
+    cmds.setParent("..")
+    _UI_FIELD_LABELS[field_name] = (label, label_control, browse)
+    return browse
+
+
+def _ui_joint_field(label, field_name, value):
+    label_control = _ui_text(label)
+    cmds.textField(field_name, text=value, height=32, annotation=label)
+    _UI_FIELD_LABELS[field_name] = (label, label_control, None)
+
+
+def _ui_actions(actions, primary=None):
+    """One or two flexible columns; labels keep space at narrow widths."""
+    for offset in range(0, len(actions), 2):
+        row = cmds.formLayout(height=36)
+        pair = actions[offset:offset + 2]
+        controls = []
+        for label, callback in pair:
+            button = cmds.button(label=label, height=32, command=callback)
+            controls.append(button)
+            if label == primary:
+                widget = _ui_widget(button)
+                if widget:
+                    widget.setProperty("primaryAction", True)
+        if len(controls) == 1:
+            cmds.formLayout(row, edit=True, attachForm=[
+                (controls[0], "left", 0), (controls[0], "right", 0),
+                (controls[0], "top", 0)])
+        else:
+            cmds.formLayout(row, edit=True,
+                            attachForm=[(controls[0], "left", 0),
+                                        (controls[1], "right", 0),
+                                        (controls[0], "top", 0),
+                                        (controls[1], "top", 0)],
+                            attachPosition=[(controls[0], "right", 4, 50),
+                                            (controls[1], "left", 4, 50)])
+        cmds.setParent("..")
+
+
+def _ui_output_options(saved, batch=False, dual=False):
+    with _ui_section("Output files"):
+        _ui_path_row("Manifest/default:", OUTPUT_DIR_FIELD, saved.output_dir,
+                     lambda *_: _browse_output_dir(
+                         OUTPUT_DIR_FIELD, "manifest/default output"))
+        _ui_text("Select at least one format. Blank folders use the default folder.")
+        records = (
+            (EXPORT_MA_CHECK, "Maya ASCII scene + animation (.ma)" if dual or batch
+             else "Maya ASCII scene (.ma)", saved.save_scene,
+             MA_OUTPUT_DIR_FIELD, saved.ma_output_dir),
+            (EXPORT_CAST_CHECK, "Model + animation CAST (.cast)" if batch
+             else "Static combined model Cast (.cast)", saved.export_cast,
+             CAST_OUTPUT_DIR_FIELD, saved.cast_output_dir),
+            (EXPORT_SMD_CHECK, "Skeleton animation only (.smd)" if batch
+             else "Static Source model (.smd)", saved.export_smd,
+             SMD_OUTPUT_DIR_FIELD, saved.smd_output_dir),
+            (EXPORT_FBX_CHECK, "Skinned model + animation (.fbx)" if batch
+             else "Static model with skinning (.fbx)", saved.export_fbx,
+             FBX_OUTPUT_DIR_FIELD, saved.fbx_output_dir),
+        )
+        for check, label, enabled, field_name, value in records:
+            cmds.checkBox(check, label=label, value=enabled, height=28)
+            cmds.rowLayout(numberOfColumns=2, adjustableColumn=1,
+                           columnWidth2=(1, 100),
+                           columnAttach2=("both", "both"), columnOffset2=(0, 6))
+            cmds.textField(field_name, text=value, height=32, width=1, enable=enabled,
+                           annotation=label)
+            browse = cmds.button(
+                label="Browse...", height=32, enable=enabled,
+                annotation="Browse: " + label,
+                command=lambda *_, name=field_name, title=label:
+                    _browse_output_dir(name, title))
+            cmds.setParent("..")
+            _UI_FIELD_LABELS[field_name] = (label, None, browse)
+
+            def toggle(value, field=field_name, button=browse):
+                cmds.textField(field, edit=True, enable=value)
+                cmds.button(button, edit=True, enable=value)
+            cmds.checkBox(check, edit=True, changeCommand=toggle)
+        if batch:
+            _ui_text("SMD stores skeletal animation only; use the JSON report for its frame rate.")
+        else:
+            _ui_text("CAST, SMD and FBX here export static models. Use Animation Batch for animated exports.")
+
+
+def _ui_create_dialog(name, title, batch):
+    for existing in (WINDOW_NAME, DUAL_WINDOW_NAME):
+        if cmds.window(existing, exists=True):
+            cmds.deleteUI(existing)
+    _UI_FIELD_LABELS.clear()
+    _UI_WRAP_TEXTS.clear()
+    _UI_SECTIONS[:] = []
+    win = cmds.window(name, title=title, widthHeight=(760, 820 if batch else 740),
+                      sizeable=True, resizeToFitChildren=False)
+    form = cmds.formLayout()
+    scroll = cmds.scrollLayout(childResizable=True)
+    cmds.columnLayout(adjustableColumn=True, rowSpacing=12,
+                      columnOffset=("both", 12))
+    return win, form, scroll
+
+
+def _ui_footer(form, scroll):
+    cmds.setParent(form)
+    footer = cmds.columnLayout(adjustableColumn=True, rowSpacing=8,
+                               columnOffset=("both", 12))
+    cmds.formLayout(form, edit=True,
+                    attachForm=[(scroll, "top", 0), (scroll, "left", 0),
+                                (scroll, "right", 0), (footer, "left", 0),
+                                (footer, "right", 0), (footer, "bottom", 12)],
+                    attachControl=[(scroll, "bottom", 10, footer)])
+    cmds.text(_UI_FEEDBACK_CONTROL, label="Ready", align="left",
+              wordWrap=True, annotation="Operation status")
+    return footer
+
+
+def _ui_finish_dialog(win, first_field):
+    """Add native accessibility metadata and keep keyboard focus in view."""
+    cmds.showWindow(win)
+    QtCore, QtWidgets, _ = _ui_qt()
+    root = _ui_widget(win)
+    if root:
+        root.setMinimumSize(560, 360)
+        font = root.font()
+        font.setPointSizeF(max(10.0, font.pointSizeF()))
+        root.setFont(font)
+        # Maya assigns explicit fonts to controls; the window font alone does
+        # not propagate to those controls.
+        for widget in root.findChildren(QtWidgets.QWidget):
+            control_font = widget.font()
+            if control_font.pointSizeF() < 10.0:
+                control_font.setPointSizeF(10.0)
+                widget.setFont(control_font)
+        root.setStyleSheet(
+            "QPushButton:focus, QLineEdit:focus, QComboBox:focus, "
+            "QListView:focus, QPlainTextEdit:focus {"
+            "border: 2px solid #80c8ff; } "
+            "QPushButton[primaryAction=\"true\"] { font-weight: 600; }")
+        for field, (label, label_control, browse) in _UI_FIELD_LABELS.items():
+            widget = _ui_widget(field)
+            if widget:
+                widget.setAccessibleName(_ui_translate(label))
+                widget.setAccessibleDescription(_ui_translate(label))
+                if label_control:
+                    text_widget = _ui_widget(label_control)
+                    if isinstance(text_widget, QtWidgets.QLabel):
+                        text_widget.setBuddy(widget)
+            if browse:
+                button = _ui_widget(browse)
+                if button:
+                    button.setFocusPolicy(QtCore.Qt.StrongFocus)
+                    button.setAccessibleName(
+                        _ui_translate("Browse...") + " " + _ui_translate(label))
+        for widget in root.findChildren(QtWidgets.QAbstractButton):
+            widget.setFocusPolicy(QtCore.Qt.StrongFocus)
+            widget.setMinimumHeight(28)
+        for widget in root.findChildren(QtWidgets.QWidget):
+            if not widget.accessibleName() and widget.toolTip():
+                widget.setAccessibleName(widget.toolTip())
+        screen = root.screen() if hasattr(root, "screen") else None
+        if screen:
+            available = screen.availableGeometry()
+            root.resize(min(root.width(), available.width() - 32),
+                        min(root.height(), available.height() - 64))
+
+        class KeepFocusVisible(QtCore.QObject):
+            def __init__(self, parent):
+                super(KeepFocusVisible, self).__init__(parent)
+                self.timer = QtCore.QTimer(self)
+                self.timer.setSingleShot(True)
+                self.timer.timeout.connect(_ui_reflow_labels)
+
+            def eventFilter(self, watched, event):
+                if watched is root and event.type() in (
+                        QtCore.QEvent.Resize, QtCore.QEvent.FontChange):
+                    self.timer.start(0)
+                if event.type() == QtCore.QEvent.FocusIn:
+                    parent = watched.parentWidget()
+                    while parent and parent is not root:
+                        if isinstance(parent, QtWidgets.QScrollArea):
+                            center = watched.mapTo(parent.widget(),
+                                                   watched.rect().center())
+                            parent.ensureVisible(
+                                center.x(), center.y(),
+                                watched.width() // 2 + 8,
+                                watched.height() // 2 + 8)
+                            break
+                        parent = parent.parentWidget()
+                return False
+
+        observer = KeepFocusVisible(root)
+        root._vwt_focus_observer = observer
+        root.installEventFilter(observer)
+        for widget in root.findChildren(QtWidgets.QWidget):
+            widget.installEventFilter(observer)
+        QtWidgets.QApplication.processEvents()
+        _ui_reflow_labels()
+    cmds.setFocus(first_field)
+
+
+def _ui_require_cast(field, label):
+    try:
+        return _validate_cast_path(_field_text(field), label)
+    except Exception:
+        cmds.setFocus(field)
+        raise
+
+
 def _show_error(title, exc):
     log("ERROR: %s" % exc)
     log(traceback.format_exc())
+    if cmds.control(_UI_FEEDBACK_CONTROL, exists=True):
+        cmds.text(_UI_FEEDBACK_CONTROL, edit=True, label="Failed:\n%s" % exc)
     cmds.confirmDialog(
         title=title,
         message="Failed:\n%s" % exc,
@@ -4522,12 +4815,10 @@ def _confirm_scene_reset():
 
 
 def _require_dialog_paths(require_weapon=True):
-    viewhands = _field_text(VIEWHANDS_FIELD)
+    viewhands = _ui_require_cast(VIEWHANDS_FIELD, "Viewhands")
     weapon = _field_text(WEAPON_FIELD)
-    if not viewhands:
-        raise RuntimeError("Please pick a viewhands (.cast) file")
-    if require_weapon and not weapon:
-        raise RuntimeError("Please pick one weapon (.cast) file")
+    if require_weapon:
+        weapon = _ui_require_cast(WEAPON_FIELD, "Weapon")
     return viewhands, weapon
 
 
@@ -4874,16 +5165,12 @@ def _dual_dialog_options(force_new_scene=False):
 
 
 def _dual_dialog_paths():
-    paths = (
-        _field_text(DUAL_VIEWHANDS_FIELD),
-        _field_text(DUAL_WEAPON_FIELD),
-        _field_text(DUAL_LEFT_ANIMATION_FIELD),
-        _field_text(DUAL_RIGHT_ANIMATION_FIELD),
-    )
-    labels = ("Viewhands", "Weapon", "Left animation", "Right animation")
-    for label, path in zip(labels, paths):
-        _validate_cast_path(path, label)
-    return paths
+    return tuple(_ui_require_cast(field, label) for field, label in (
+        (DUAL_VIEWHANDS_FIELD, "Viewhands"),
+        (DUAL_WEAPON_FIELD, "Weapon"),
+        (DUAL_LEFT_ANIMATION_FIELD, "Left animation"),
+        (DUAL_RIGHT_ANIMATION_FIELD, "Right animation"),
+    ))
 
 
 def _reference_pose_ui_summary(reference_pose):
@@ -5048,10 +5335,13 @@ def _add_animation_queue_ui(dual=False, form=None, scroll=None):
         cmds.scrollField(details, edit=True, text="\n\n".join(
             "\n".join(jobs[index - 1]) for index in selected))
 
-    cmds.textScrollList(BATCH_ANIMATION_LIST, height=95,
+    cmds.textScrollList(BATCH_ANIMATION_LIST, height=140,
+                        annotation="Animation queue:",
                         allowMultiSelection=True, selectCommand=show_selected_paths)
+    empty_hint = _ui_text("No animations queued. Add files to begin.")
     cmds.text(label="Selected paths (left, then right):" if dual else "Selected paths:", align="left")
-    details = cmds.scrollField(editable=False, wordWrap=True, height=55)
+    details = cmds.scrollField(editable=False, wordWrap=True, height=55,
+                               annotation="Selected paths:")
 
     def redraw():
         cmds.textScrollList(BATCH_ANIMATION_LIST, edit=True, removeAll=True)
@@ -5059,6 +5349,10 @@ def _add_animation_queue_ui(dual=False, form=None, scroll=None):
             cmds.textScrollList(BATCH_ANIMATION_LIST, edit=True,
                                 append="%d. %s" % (index + 1, " | ".join(os.path.basename(p) for p in job)))
         cmds.scrollField(details, edit=True, text="")
+        cmds.text(empty_hint, edit=True, manage=not bool(jobs))
+        cmds.button(start_button, edit=True, enable=bool(jobs))
+        cmds.text(BATCH_ANIMATION_STATUS, edit=True,
+                  label="Ready" if jobs else "No animations queued. Add files to begin.")
 
     def add_current_pair(*_):
         try:
@@ -5098,27 +5392,23 @@ def _add_animation_queue_ui(dual=False, form=None, scroll=None):
             del jobs[index - 1]
         redraw()
 
-    queue_controls = cmds.rowLayout(numberOfColumns=4,
-                                   columnWidth4=(185, 185, 185, 185))
-    if dual:
-        cmds.button(label="Add Current Pair", command=add_current_pair)
-    cmds.button(label="Add Animation Pairs..." if dual else "Add Animations...",
-                command=add_files)
-    cmds.button(label="Remove Selected", command=remove_selected)
-    cmds.button(label="Clear Queue", command=lambda *_: (jobs.clear(), redraw()))
+    cmds.textScrollList(BATCH_ANIMATION_LIST, edit=True,
+                        deleteKeyCommand=remove_selected)
+    queue_controls = cmds.columnLayout(adjustableColumn=True, rowSpacing=4)
+    actions = [("Add Current Pair", add_current_pair)] if dual else []
+    actions.extend([
+        ("Add Animation Pairs..." if dual else "Add Animations...", add_files),
+        ("Remove Selected", remove_selected),
+        ("Clear Queue", lambda *_: (jobs.clear(), redraw())),
+    ])
+    _ui_actions(actions)
     cmds.setParent("..")
     if dual:
         cmds.text(label="Check every left/right pair in the queue before exporting.", align="left")
     if form is not None:
-        cmds.setParent(form)
-        footer = cmds.columnLayout(adjustableColumn=True, rowSpacing=6,
-                                   columnOffset=("both", 10))
-        cmds.formLayout(form, edit=True,
-                        attachForm=[(scroll, "top", 0), (scroll, "left", 0),
-                                    (scroll, "right", 0), (footer, "left", 0),
-                                    (footer, "right", 0), (footer, "bottom", 10)],
-                        attachControl=[(scroll, "bottom", 8, footer)])
-    cmds.text(BATCH_ANIMATION_STATUS, label="Ready", align="left")
+        _ui_footer(form, scroll)
+    cmds.text(BATCH_ANIMATION_STATUS, label="No animations queued. Add files to begin.",
+              align="left", wordWrap=True)
     cmds.progressBar(BATCH_ANIMATION_PROGRESS, maxValue=1, progress=0, height=16)
 
     def update_progress(index, total, job):
@@ -5142,10 +5432,10 @@ def _add_animation_queue_ui(dual=False, form=None, scroll=None):
             options = _dual_dialog_options() if dual else _dialog_options()
             validate_output_options(options)
             queue = _animation_jobs(jobs if dual else [job[0] for job in jobs], dual)
-            hands = _field_text(DUAL_VIEWHANDS_FIELD if dual else VIEWHANDS_FIELD)
-            weapon = _field_text(DUAL_WEAPON_FIELD if dual else WEAPON_FIELD)
-            _validate_cast_path(hands, "Viewhands")
-            _validate_cast_path(weapon, "Weapon")
+            hands = _ui_require_cast(
+                DUAL_VIEWHANDS_FIELD if dual else VIEWHANDS_FIELD, "Viewhands")
+            weapon = _ui_require_cast(
+                DUAL_WEAPON_FIELD if dual else WEAPON_FIELD, "Weapon")
             if not _confirm_scene_reset():
                 return
             options.force_new_scene = True
@@ -5156,7 +5446,7 @@ def _add_animation_queue_ui(dual=False, form=None, scroll=None):
             running["cancel"] = False
             cmds.button(start_button, edit=True, enable=False)
             cmds.button(cancel_button, edit=True, enable=True)
-            cmds.rowLayout(queue_controls, edit=True, enable=False)
+            cmds.columnLayout(queue_controls, edit=True, enable=False)
             runner = batch_export_dual_animations if dual else batch_export_animations
             summary = runner(hands, weapon, queue if dual else [j[0] for j in queue],
                              options, progress=update_progress)
@@ -5179,14 +5469,21 @@ def _add_animation_queue_ui(dual=False, form=None, scroll=None):
             _show_error(PRODUCT_SHORT_NAME, exc)
         finally:
             if cmds.button(start_button, exists=True):
-                cmds.button(start_button, edit=True, enable=True)
+                cmds.button(start_button, edit=True, enable=bool(jobs))
                 cmds.button(cancel_button, edit=True, enable=False)
-                cmds.rowLayout(queue_controls, edit=True, enable=True)
+                cmds.columnLayout(queue_controls, edit=True, enable=True)
 
-    cmds.rowLayout(numberOfColumns=2, columnWidth2=(250, 250))
-    start_button = cmds.button(label="Batch Export Animations", height=32, command=run_queue)
+    action_row = cmds.formLayout(height=36)
+    start_button = cmds.button(label="Batch Export Animations", height=32,
+                               enable=False, command=run_queue)
     cancel_button = cmds.button(label="Cancel After Current Item", height=32, enable=False,
                                 command=lambda *_: running.update(cancel=True))
+    cmds.formLayout(action_row, edit=True,
+                    attachForm=[(start_button, "left", 0), (start_button, "top", 0),
+                                (cancel_button, "right", 0), (cancel_button, "top", 0)],
+                    attachPosition=[(start_button, "right", 4, 50),
+                                    (cancel_button, "left", 4, 50)])
+    _ui_widget(start_button).setProperty("primaryAction", True)
     cmds.setParent("..")
 
 
@@ -5204,331 +5501,103 @@ def _open_batch_from_builder(dual=False):
 
 
 def show_dual_dialog(batch=False):
-    """Build and show the duplicated-weapon Dual-Wield Builder."""
-    if cmds.window(WINDOW_NAME, exists=True):
-        cmds.deleteUI(WINDOW_NAME)
-    if cmds.window(DUAL_WINDOW_NAME, exists=True):
-        cmds.deleteUI(DUAL_WINDOW_NAME)
+    """Show source files, mapping, output formats, and explicit dual actions."""
     saved = load_saved_options()
-    win = cmds.window(
-        DUAL_WINDOW_NAME,
-        title="%s v%s - %s" % (PRODUCT_SHORT_NAME, VERSION,
-                               "Dual Animation Batch" if batch else "Dual-Wield Builder"),
-        widthHeight=(880, 860 if batch else 690),
-        resizeToFitChildren=not batch,
-    )
+    win, form, scroll = _ui_create_dialog(
+        DUAL_WINDOW_NAME, "%s v%s - %s" % (
+            PRODUCT_SHORT_NAME, VERSION,
+            "Dual Animation Batch" if batch else "Dual-Wield Builder"), batch)
+    with _ui_section("Source files"):
+        _ui_text("Duplicates one weapon onto the left and right hand tags.")
+        for label, field, option, default in (
+                ("Viewhands:", DUAL_VIEWHANDS_FIELD, DUAL_VIEWHANDS_OPTVAR,
+                 load_viewhands_path()),
+                ("Weapon:", DUAL_WEAPON_FIELD, DUAL_WEAPON_OPTVAR, ""),
+                ("Left animation:", DUAL_LEFT_ANIMATION_FIELD,
+                 DUAL_LEFT_ANIMATION_OPTVAR, ""),
+                ("Right animation:", DUAL_RIGHT_ANIMATION_FIELD,
+                 DUAL_RIGHT_ANIMATION_OPTVAR, "")):
+            _ui_path_row(label, field, _load_string_option(option, default))
+        _ui_text("Animation mode:")
+        cmds.optionMenu(DUAL_MODE_MENU, height=32, annotation="Animation mode:")
+        cmds.menuItem(label="simultaneous")
+        cmds.menuItem(label="sequential")
+        saved_mode = _load_string_option(DUAL_MODE_OPTVAR, "simultaneous")
+        if saved_mode in DUAL_ANIMATION_MODES:
+            cmds.optionMenu(DUAL_MODE_MENU, edit=True, value=saved_mode)
+        _ui_text("Simultaneous mode splits hand branches and uses the right "
+                 "animation for shared torso/root tracks.")
+    with _ui_section("Joint mapping and reference pose", collapsed=True):
+        _ui_joint_field("Weapon root:", SOURCE_JOINT_FIELD, DEFAULT_SOURCE_JOINT)
+        _ui_joint_field("Left target:", DUAL_LEFT_TARGET_FIELD, DEFAULT_LEFT_TARGET_JOINT)
+        _ui_joint_field("Right target:", DUAL_RIGHT_TARGET_FIELD, DEFAULT_RIGHT_TARGET_JOINT)
+        _ui_path_row("Reference pose (optional):", DUAL_REFERENCE_POSE_FIELD,
+                     _load_string_option(DUAL_REFERENCE_POSE_OPTVAR, ""))
+        _ui_text("Reference pose compensation shifts relative/additive weapon-tag "
+                 "translation tracks from the selected reference viewhands rest pose.")
+    _ui_output_options(saved, batch=batch, dual=True)
     if batch:
-        batch_form = cmds.formLayout()
-        batch_scroll = cmds.scrollLayout(childResizable=True)
-    cmds.columnLayout(
-        adjustableColumn=True, rowSpacing=7, columnOffset=("both", 10))
-    cmds.text(
-        label=(
-            "Duplicates one weapon: left j_gun -> tag_weapon_left; "
-            "right j_gun -> tag_weapon_right."),
-        align="left",
-    )
-    cmds.text(
-        label=(
-            "Simultaneous mode splits hand branches and uses the right "
-            "animation for shared torso/root tracks."),
-        align="left",
-    )
-    cmds.separator(height=5, style="in")
-
-    def add_path_row(label, field_name, value, browse_callback=None):
-        cmds.rowLayout(
-            numberOfColumns=3,
-            columnWidth3=(125, 665, 75),
-            adjustableColumn=2,
-        )
-        cmds.text(label=label, align="left")
-        cmds.textField(field_name, text=value)
-        cmds.button(
-            label="Browse...",
-            command=(browse_callback or
-                     (lambda *_: _browse_cast(field_name))))
-        cmds.setParent("..")
-
-    add_path_row(
-        "Viewhands:",
-        DUAL_VIEWHANDS_FIELD,
-        _load_string_option(DUAL_VIEWHANDS_OPTVAR, load_viewhands_path()),
-    )
-    add_path_row(
-        "Weapon:",
-        DUAL_WEAPON_FIELD,
-        _load_string_option(DUAL_WEAPON_OPTVAR, ""),
-    )
-    add_path_row(
-        "Left animation:",
-        DUAL_LEFT_ANIMATION_FIELD,
-        _load_string_option(DUAL_LEFT_ANIMATION_OPTVAR, ""),
-    )
-    add_path_row(
-        "Right animation:",
-        DUAL_RIGHT_ANIMATION_FIELD,
-        _load_string_option(DUAL_RIGHT_ANIMATION_OPTVAR, ""),
-    )
-    add_path_row(
-        "Reference pose (optional):",
-        DUAL_REFERENCE_POSE_FIELD,
-        _load_string_option(DUAL_REFERENCE_POSE_OPTVAR, ""),
-    )
-    cmds.text(
-        label=(
-            "Reference pose compensation shifts relative/additive weapon-tag "
-            "translation tracks from the selected reference viewhands rest pose."),
-        align="left",
-    )
-    add_path_row(
-        "Manifest/default:",
-        OUTPUT_DIR_FIELD,
-        saved.output_dir,
-        lambda *_: _browse_output_dir(
-            OUTPUT_DIR_FIELD, "manifest/default output"),
-    )
-
-    cmds.rowLayout(
-        numberOfColumns=6,
-        columnWidth6=(85, 130, 85, 150, 90, 170),
-    )
-    cmds.text(label="Weapon root:", align="left")
-    cmds.textField(SOURCE_JOINT_FIELD, text=DEFAULT_SOURCE_JOINT)
-    cmds.text(label="Left target:", align="left")
-    cmds.textField(
-        DUAL_LEFT_TARGET_FIELD, text=DEFAULT_LEFT_TARGET_JOINT)
-    cmds.text(label="Right target:", align="left")
-    cmds.textField(
-        DUAL_RIGHT_TARGET_FIELD, text=DEFAULT_RIGHT_TARGET_JOINT)
-    cmds.setParent("..")
-
-    cmds.rowLayout(numberOfColumns=2, columnWidth2=(125, 280))
-    cmds.text(label="Animation mode:", align="left")
-    cmds.optionMenu(DUAL_MODE_MENU)
-    cmds.menuItem(label="simultaneous")
-    cmds.menuItem(label="sequential")
-    saved_mode = _load_string_option(DUAL_MODE_OPTVAR, "simultaneous")
-    if saved_mode in ("simultaneous", "sequential"):
-        cmds.optionMenu(DUAL_MODE_MENU, edit=True, value=saved_mode)
-    cmds.setParent("..")
-
-    cmds.text(
-        label=("Animated formats (independent folders; select at least one):" if batch else
-            "Output formats and folders (blank folder uses "
-            "Manifest/default; Cast/SMD/FBX are static model outputs):"),
-        align="left",
-    )
-
-    def add_output_row(check_name, label, enabled, field_name, value):
-        cmds.rowLayout(
-            numberOfColumns=3,
-            columnWidth3=(280 if batch else 220, 510 if batch else 570, 75),
-            adjustableColumn=2,
-        )
-        cmds.checkBox(check_name, label=label, value=enabled)
-        cmds.textField(field_name, text=value)
-        cmds.button(
-            label="Browse...",
-            command=lambda *_: _browse_output_dir(field_name, label),
-        )
-        cmds.setParent("..")
-
-    add_output_row(
-        EXPORT_MA_CHECK, "Maya ASCII scene + animation (.ma)",
-        saved.save_scene, MA_OUTPUT_DIR_FIELD, saved.ma_output_dir)
-    add_output_row(
-        EXPORT_CAST_CHECK, "Model + animation CAST (.cast)" if batch else "Static combined model Cast (.cast)",
-        saved.export_cast, CAST_OUTPUT_DIR_FIELD, saved.cast_output_dir)
-    add_output_row(
-        EXPORT_SMD_CHECK, "Skeleton animation only (.smd)" if batch else "Static Source model (.smd)",
-        saved.export_smd, SMD_OUTPUT_DIR_FIELD, saved.smd_output_dir)
-    add_output_row(
-        EXPORT_FBX_CHECK, "Skinned model + animation (.fbx)" if batch else "Static model with skinning (.fbx)",
-        saved.export_fbx, FBX_OUTPUT_DIR_FIELD, saved.fbx_output_dir)
-
-    if batch:
-        _add_animation_queue_ui(dual=True, form=batch_form, scroll=batch_scroll)
-        cmds.window(win, edit=True, topLeftCorner=(60, 60))
-        cmds.showWindow(win)
-        return
-    cmds.button(label="Dual Animation Batch...",
-                command=lambda *_: _open_batch_from_builder(dual=True))
-    cmds.separator(height=5, style="in")
-    cmds.rowLayout(numberOfColumns=3, columnWidth3=(220, 220, 220))
-    cmds.button(
-        label="Preflight Dual", height=30,
-        command=lambda *_: _preflight_dual_from_dialog())
-    cmds.button(
-        label="Build + Import Both", height=30,
-        command=lambda *_: _run_dual_from_dialog())
-    cmds.button(
-        label="Validate Dual", height=30,
-        command=lambda *_: _validate_dual_ui())
-    cmds.setParent("..")
-    cmds.rowLayout(numberOfColumns=4, columnWidth4=(165, 165, 165, 165))
-    cmds.button(
-        label="Replace Left Clip...",
-        command=lambda *_: _replace_dual_animation_ui("left"))
-    cmds.button(
-        label="Replace Right Clip...",
-        command=lambda *_: _replace_dual_animation_ui("right"))
-    cmds.button(
-        label="Save Current Result",
-        command=lambda *_: _save_current_ui())
-    cmds.button(
-        label="Close",
-        command=lambda *_: cmds.deleteUI(DUAL_WINDOW_NAME))
-    cmds.setParent("..")
-    cmds.showWindow(win)
+        _add_animation_queue_ui(dual=True, form=form, scroll=scroll)
+    else:
+        with _ui_section("Current scene tools", collapsed=True):
+            _ui_actions([
+                ("Validate Dual", lambda *_: _validate_dual_ui()),
+                ("Save Current Result", lambda *_: _save_current_ui()),
+                ("Replace Left Clip...", lambda *_: _replace_dual_animation_ui("left")),
+                ("Replace Right Clip...", lambda *_: _replace_dual_animation_ui("right")),
+                ("Open Output Folders", lambda *_: _open_output_dir_ui()),
+                ("Dual Animation Batch...", lambda *_: _open_batch_from_builder(dual=True)),
+            ])
+        _ui_footer(form, scroll)
+        _ui_actions([
+            ("Preflight Dual", lambda *_: _preflight_dual_from_dialog()),
+            ("Build + Import Both", lambda *_: _run_dual_from_dialog()),
+            ("Close", lambda *_: cmds.deleteUI(DUAL_WINDOW_NAME)),
+        ], primary="Build + Import Both")
+    _ui_finish_dialog(win, DUAL_VIEWHANDS_FIELD)
 
 
 def show_dialog(batch=False, weapon_path=""):
-    """Build and show the single-weapon dialog."""
-    if cmds.window(WINDOW_NAME, exists=True):
-        cmds.deleteUI(WINDOW_NAME)
-    if cmds.window(DUAL_WINDOW_NAME, exists=True):
-        cmds.deleteUI(DUAL_WINDOW_NAME)
-
+    """Show the single-weapon workflow with keyboard-accessible shared controls."""
     saved = load_saved_options()
-    win = cmds.window(
-        WINDOW_NAME,
-        title="%s v%s - %s" % (PRODUCT_SHORT_NAME, VERSION,
-                               "Single Animation Batch" if batch else "Single Weapon"),
-        widthHeight=(820, 760 if batch else 540),
-        resizeToFitChildren=not batch,
-    )
+    win, form, scroll = _ui_create_dialog(
+        WINDOW_NAME, "%s v%s - %s" % (
+            PRODUCT_SHORT_NAME, VERSION,
+            "Single Animation Batch" if batch else "Single Weapon"), batch)
+    with _ui_section("Source files"):
+        _ui_text("Single mode - weapon:j_gun -> viewhands:tag_weapon. "
+                 "Use Dual-Wield Builder for Akimbo scenes.")
+        _ui_path_row("Viewhands:", VIEWHANDS_FIELD, load_viewhands_path())
+        _ui_path_row("Weapon:", WEAPON_FIELD, weapon_path)
+    with _ui_section("Joint mapping", collapsed=True):
+        _ui_joint_field("Weapon joint:", SOURCE_JOINT_FIELD, saved.source_joint)
+        _ui_joint_field("Viewhands tag:", TARGET_JOINT_FIELD, saved.target_joint)
+        cmds.checkBox(
+            PROTECT_TRANSLATION_CHECK,
+            label="Protect weapon joint translation when importing animation",
+            value=True if batch else saved.protect_translation,
+            enable=not batch, height=28)
+    _ui_output_options(saved, batch=batch)
     if batch:
-        batch_form = cmds.formLayout()
-        batch_scroll = cmds.scrollLayout(childResizable=True)
-    cmds.columnLayout(
-        adjustableColumn=True,
-        rowSpacing=7,
-        columnOffset=("both", 10),
-    )
-    cmds.text(
-        label=("Single mode - weapon:j_gun -> viewhands:tag_weapon. "
-               "Use Dual-Wield Builder for Akimbo scenes."),
-        align="left",
-    )
-    cmds.separator(height=5, style="in")
-
-    def add_path_row(label, field_name, value, callback):
-        cmds.rowLayout(
-            numberOfColumns=3,
-            columnWidth3=(120, 600, 75),
-            adjustableColumn=2,
-        )
-        cmds.text(label=label, align="left")
-        cmds.textField(field_name, text=value)
-        cmds.button(label="Browse...", command=callback)
-        cmds.setParent("..")
-
-    add_path_row(
-        "Viewhands:", VIEWHANDS_FIELD, load_viewhands_path(),
-        lambda *_: _browse_cast(VIEWHANDS_FIELD))
-    add_path_row(
-        "Weapon:", WEAPON_FIELD, weapon_path,
-        lambda *_: _browse_cast(WEAPON_FIELD))
-    add_path_row(
-        "Manifest/default:", OUTPUT_DIR_FIELD, saved.output_dir,
-        lambda *_: _browse_output_dir(
-            OUTPUT_DIR_FIELD, "manifest/default output"))
-
-    cmds.rowLayout(
-        numberOfColumns=4,
-        columnWidth4=(105, 215, 105, 215),
-        adjustableColumn=4,
-    )
-    cmds.text(label="Weapon joint:", align="left")
-    cmds.textField(SOURCE_JOINT_FIELD, text=saved.source_joint)
-    cmds.text(label="Viewhands tag:", align="left")
-    cmds.textField(TARGET_JOINT_FIELD, text=saved.target_joint)
-    cmds.setParent("..")
-
-    cmds.checkBox(
-        PROTECT_TRANSLATION_CHECK,
-        label="Protect weapon joint translation when importing animation",
-        value=True if batch else saved.protect_translation,
-        enable=not batch,
-    )
-    cmds.text(
-        label=("Output formats and folders (select at least one; blank folder "
-               "uses Manifest/default):"),
-        align="left",
-    )
-
-    def add_output_row(check_name, label, enabled, field_name, value):
-        cmds.rowLayout(
-            numberOfColumns=3,
-            columnWidth3=(275 if batch else 215, 445 if batch else 505, 75),
-            adjustableColumn=2,
-        )
-        cmds.checkBox(check_name, label=label, value=enabled)
-        cmds.textField(field_name, text=value)
-        cmds.button(
-            label="Browse...",
-            command=lambda *_: _browse_output_dir(field_name, label),
-        )
-        cmds.setParent("..")
-
-    add_output_row(
-        EXPORT_MA_CHECK, "Maya ASCII scene + animation (.ma)" if batch else "Maya ASCII scene (.ma)", saved.save_scene,
-        MA_OUTPUT_DIR_FIELD, saved.ma_output_dir)
-    add_output_row(
-        EXPORT_CAST_CHECK, "Model + animation CAST (.cast)" if batch else "Combined model Cast (.cast)", saved.export_cast,
-        CAST_OUTPUT_DIR_FIELD, saved.cast_output_dir)
-    add_output_row(
-        EXPORT_SMD_CHECK, "Skeleton animation only (.smd)" if batch else "Source model (.smd)", saved.export_smd,
-        SMD_OUTPUT_DIR_FIELD, saved.smd_output_dir)
-    add_output_row(
-        EXPORT_FBX_CHECK, "Skinned model + animation (.fbx)" if batch else "Static model with skinning (.fbx)",
-        saved.export_fbx, FBX_OUTPUT_DIR_FIELD, saved.fbx_output_dir)
-    cmds.text(
-        label=("SMD stores skeletal animation only; use the JSON report for its frame rate." if batch else
-               ".cast/.smd model export uses bundled/compatible Cast v1.99; "
-               ".fbx excludes animation."),
-        align="left",
-    )
-    if batch:
-        _add_animation_queue_ui(form=batch_form, scroll=batch_scroll)
-        cmds.window(win, edit=True, topLeftCorner=(60, 60))
-        cmds.showWindow(win)
-        return
-    cmds.button(label="Single Animation Batch...",
-                command=lambda *_: _open_batch_from_builder())
-    cmds.separator(height=5, style="in")
-
-    cmds.rowLayout(
-        numberOfColumns=4,
-        columnWidth4=(165, 165, 165, 165),
-    )
-    cmds.button(label="Preflight", height=30,
-                command=lambda *_: _preflight_from_dialog())
-    cmds.button(label="Attach && Export", height=30,
-                command=lambda *_: _run_from_dialog())
-    cmds.button(label="Batch Weapons...", height=30,
-                command=lambda *_: _batch_from_dialog())
-    cmds.button(label="Import Animation Safely...", height=30,
-                command=lambda *_: import_animation())
-    cmds.setParent("..")
-
-    cmds.rowLayout(
-        numberOfColumns=5,
-        columnWidth5=(130, 130, 130, 130, 130),
-    )
-    cmds.button(label="Validate Current",
-                command=lambda *_: _validate_current_ui())
-    cmds.button(label="Select Attachment",
-                command=lambda *_: _select_attachment_ui())
-    cmds.button(label="Save Current Result",
-                command=lambda *_: _save_current_ui())
-    cmds.button(label="Open Output Folders",
-                command=lambda *_: _open_output_dir_ui())
-    cmds.button(label="Close",
-                command=lambda *_: cmds.deleteUI(WINDOW_NAME))
-    cmds.setParent("..")
-    cmds.showWindow(win)
+        _add_animation_queue_ui(form=form, scroll=scroll)
+    else:
+        with _ui_section("Current scene tools", collapsed=True):
+            _ui_actions([
+                ("Import Animation Safely...", lambda *_: import_animation()),
+                ("Validate Current", lambda *_: _validate_current_ui()),
+                ("Select Attachment", lambda *_: _select_attachment_ui()),
+                ("Save Current Result", lambda *_: _save_current_ui()),
+                ("Open Output Folders", lambda *_: _open_output_dir_ui()),
+                ("Batch Weapons...", lambda *_: _batch_from_dialog()),
+                ("Single Animation Batch...", lambda *_: _open_batch_from_builder()),
+            ])
+        _ui_footer(form, scroll)
+        _ui_actions([
+            ("Preflight", lambda *_: _preflight_from_dialog()),
+            ("Attach && Export", lambda *_: _run_from_dialog()),
+            ("Close", lambda *_: cmds.deleteUI(WINDOW_NAME)),
+        ], primary="Attach && Export")
+    _ui_finish_dialog(win, VIEWHANDS_FIELD)
 
 
 # ---------------------------------------------------------------------------
@@ -5616,7 +5685,7 @@ def _about_message():
         "  Verified: Maya 2025 for Windows.\n"
         "- Uses an already loaded compatible Cast translator, or the "
         "adjacent\n"
-        "  patched CAST 1.99 fallback.\n\n"
+        "  patched CAST 2.00 fallback.\n\n"
         "DUAL-WIELD SCOPE\n"
         "- Duplicates the same weapon; does not merge two different weapon\n"
         "  skeletons.\n\n"

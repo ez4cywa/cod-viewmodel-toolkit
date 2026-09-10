@@ -1,4 +1,4 @@
-"""Simplified Chinese entry point for Maya Viewmodel Weapon Toolkit 3.1.0.
+"""Simplified Chinese entry point for Maya Viewmodel Weapon Toolkit 3.2.0.
 
 This file reuses the English implementation beside it and localizes Maya UI
 text at the command boundary. Technical identifiers, joint names, file
@@ -17,7 +17,7 @@ import sys
 import maya.cmds as _maya_cmds
 
 
-VERSION = "3.1.0"
+VERSION = "3.2.0"
 _LOADER_FILE = globals().get("__file__") or sys._getframe().f_code.co_filename
 _CORE_PATH = os.path.join(
     os.path.dirname(os.path.abspath(_LOADER_FILE)),
@@ -27,6 +27,16 @@ _CORE_MODULE_NAME = "viewmodel_weapon_toolkit_zh_cn_core"
 
 
 _EXACT_TRANSLATIONS = {
+    "Source files": "输入文件",
+    "Joint mapping": "关节映射",
+    "Joint mapping and reference pose": "关节映射与参考姿态",
+    "Output files": "输出文件",
+    "Current scene tools": "当前场景工具",
+    "Operation status": "操作状态",
+    "Duplicates one weapon onto the left and right hand tags.": "将同一武器复制到左右手挂点。",
+    "Select at least one format. Blank folders use the default folder.": "至少勾选一种格式。目录留空时使用默认目录。",
+    "CAST, SMD and FBX here export static models. Use Animation Batch for animated exports.": "此处 CAST、SMD 和 FBX 导出静态模型。导出动画请使用动画批量导出。",
+    "No animations queued. Add files to begin.": "队列为空，请先添加动画文件。",
     "Single Animation Batch...": "单武器动画批量导出…",
     "Dual Animation Batch...": "双持动画批量导出…",
     "Model + animation CAST (.cast)": "模型与动画 CAST（.cast）",
@@ -147,9 +157,9 @@ _PHRASE_TRANSLATIONS = (
      "- 预期兼容 Maya 2022+ 的 Python 3 模式；\n"
      "  已在 Windows 版 Maya 2025 验证。"),
     ("- Uses an already loaded compatible Cast translator, or the adjacent\n"
-     "  patched CAST 1.99 fallback.",
+     "  patched CAST 2.00 fallback.",
      "- 优先使用已加载的兼容 Cast 转换器；\n"
-     "  否则回退到相邻的补丁版 CAST 1.99。"),
+     "  否则回退到相邻的补丁版 CAST 2.00。"),
     ("DUAL-WIELD SCOPE", "双持范围"),
     ("- Duplicates the same weapon; does not merge two different weapon\n"
      "  skeletons.",
@@ -261,8 +271,8 @@ _PHRASE_TRANSLATIONS = (
     ("select at least one", "至少选择一种格式"),
     ("blank folder uses Manifest/default", "目录留空时使用清单/默认目录"),
     ("Cast/SMD/FBX are static model outputs", "Cast/SMD/FBX 为静态模型输出"),
-    (".cast/.smd model export uses bundled/compatible Cast v1.99;",
-     ".cast/.smd 模型导出使用内置/兼容的 Cast v1.99；"),
+    (".cast/.smd model export uses bundled/compatible Cast v2.00;",
+     ".cast/.smd 模型导出使用内置/兼容的 Cast v2.00；"),
     (".fbx excludes animation.", ".fbx 不包含动画。"),
     ("Use saved settings and pick one weapon file.",
      "使用已保存设置并选择一个武器文件。"),
@@ -327,7 +337,8 @@ class _LocalizedCmdsProxy:
 
     _UI_COMMANDS = {
         "button", "checkBox", "confirmDialog", "fileDialog2", "menu",
-        "menuItem", "progressWindow", "text", "window",
+        "menuItem", "progressWindow", "text", "window", "frameLayout",
+        "textField", "textScrollList", "optionMenu",
     }
     _UI_KEYWORDS = {
         "annotation", "button", "cancelButton", "caption", "defaultButton",

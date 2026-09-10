@@ -33,8 +33,8 @@ def _assert_loaded(path, plugin_name):
     version = str(cmds.pluginInfo(plugin_name, query=True, version=True))
     if not _same_path(loaded_path, path):
         raise RuntimeError("Maya loaded the wrong path: %s" % loaded_path)
-    if version != "3.1.0":
-        raise RuntimeError("Expected version 3.1.0, got %s" % version)
+    if version != "3.2.0":
+        raise RuntimeError("Expected version 3.2.0, got %s" % version)
     if not hasattr(cmds, "viewmodelWeaponToolkit"):
         raise RuntimeError("viewmodelWeaponToolkit command is missing")
     if not hasattr(cmds, "attachGun"):
@@ -50,8 +50,8 @@ def _assert_vendored_cast_loaded(expected_path):
         translators = [translators]
     if not _same_path(loaded_path, expected_path):
         raise RuntimeError("Maya loaded the wrong CAST plugin: %s" % loaded_path)
-    if version != "1.99":
-        raise RuntimeError("Expected bundled CAST 1.99, got %s" % version)
+    if version != "2.00":
+        raise RuntimeError("Expected bundled CAST 2.00, got %s" % version)
     if not any(str(name).lower() == "cast" for name in translators):
         raise RuntimeError("Bundled CAST translator is not registered")
     cast_module = sys.modules.get("cast")
@@ -174,12 +174,12 @@ def main():
     primary_module = _module_from_path(PRIMARY)
     about = primary_module._about_message()
     required_about = (
-        "Maya Viewmodel Weapon Toolkit v3.1.0",
+        "Maya Viewmodel Weapon Toolkit v3.2.0",
         "WORKFLOWS",
         "ANIMATION & EXPORT",
         "DQS skinning",
         "Maya 2022+",
-        "patched CAST 1.99",
+        "patched CAST 2.00",
         "DUAL-WIELD SCOPE",
         "does not merge two different weapon",
     )
@@ -203,17 +203,17 @@ def main():
     chinese_core = sys.modules.get("viewmodel_weapon_toolkit_zh_cn_core")
     if chinese_core is None:
         raise RuntimeError("Chinese shared core module is unavailable")
-    if chinese_core.VERSION != "3.1.0":
+    if chinese_core.VERSION != "3.2.0":
         raise RuntimeError("Chinese core changed the release version")
     translator = chinese_core.cmds._commands
     if translator is not cmds:
         raise RuntimeError("Chinese UI proxy is not attached to maya.cmds")
-    if chinese_core._zh_cn_entry_version != "3.1.0":
+    if chinese_core._zh_cn_entry_version != "3.2.0":
         raise RuntimeError("Chinese entry point changed the release version")
     translate_ui_text = chinese_core._zh_cn_translate_ui_text
     localized_about = translate_ui_text(chinese_core._about_message())
     required_localized_about = (
-        "视角模型武器工具包 v3.1.0",
+        "视角模型武器工具包 v3.2.0",
         "主要流程",
         "动画与导出",
         "DQS 蒙皮",
@@ -239,8 +239,8 @@ def main():
             "失败：\nexample":
         raise RuntimeError("Chinese error translation is unavailable")
     if translate_ui_text(
-            ".cast/.smd model export uses bundled/compatible Cast v1.99;") != \
-            ".cast/.smd 模型导出使用内置/兼容的 Cast v1.99；":
+            ".cast/.smd model export uses bundled/compatible Cast v2.00;") != \
+            ".cast/.smd 模型导出使用内置/兼容的 Cast v2.00；":
         raise RuntimeError("Chinese bundled CAST text is unavailable")
     fake_commands = _FakeDialogCommands()
     proxy = type(chinese_core.cmds)(fake_commands)
