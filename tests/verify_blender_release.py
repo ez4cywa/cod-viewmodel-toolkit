@@ -25,7 +25,7 @@ from cod_viewmodel_toolkit.backend import backend
 
 assert Path(cod_viewmodel_toolkit.__file__).resolve().is_relative_to(scripts)
 assert Path(backend().importer.__file__).parent.name == "vendor_cast"
-assert cod_viewmodel_toolkit.bl_info["version"] == (3, 3, 0)
+assert cod_viewmodel_toolkit.bl_info["version"] == (3, 4, 0)
 assert hasattr(bpy.types.Scene, "cod_vwt")
 sys.path.insert(0, str(ROOT / "tests"))
 from blender_fixtures import model, animation
@@ -40,8 +40,9 @@ with tempfile.TemporaryDirectory(prefix="cod_blender_package_") as temporary:
     assert core.verify(rig)["valid"]
     with redirect_stdout(io.StringIO()):
         result = exporting.export(rig, exporting.ExportOptions(
-            directory=str(folder / "out"), fbx=True, smd=True))
+            directory=str(folder / "out"), fbx=True, smd=True, output_unit="m"))
     assert len(result["outputs"]) == 4
+    assert result["unit_conversion"]["factor"] == 0.3048
 addon_utils.disable("cod_viewmodel_toolkit", default_set=False)
 assert not hasattr(bpy.types.Scene, "cod_vwt")
 print("BLENDER_RELEASE_INSTALL_OK", archive.name)

@@ -1,6 +1,6 @@
 """Scoped CoD exports and batches; no scene resets or preference writes."""
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 import json
 import os
 from pathlib import Path
@@ -21,6 +21,7 @@ class ExportOptions:
     fbx: bool = False
     smd: bool = False
     folders: dict = field(default_factory=dict)
+    output_unit: str = "original"
 
 
 def _folder(path):
@@ -33,6 +34,8 @@ def _folder(path):
 
 
 def output_plan(settings, stem):
+    if settings.output_unit not in ("original", "m"):
+        raise ValueError("Output unit must be original or m")
     default = _folder(settings.directory)
     folders = {extension: _folder(settings.folders.get(extension) or str(default))
                for extension in ("blend", "cast", "fbx", "smd")
@@ -64,6 +67,8 @@ def _blend(rig, path):
             export_scene.collection.objects.link(obj)
         export_scene.frame_start, export_scene.frame_end = source.frame_start, source.frame_end
         export_scene.render.fps, export_scene.render.fps_base = source.render.fps, source.render.fps_base
+        for name in ("system", "scale_length", "length_unit"):
+            setattr(export_scene.unit_settings, name, getattr(source.unit_settings, name))
         export_scene.frame_set(source.frame_current)
         bpy.data.libraries.write(str(path), {export_scene}, path_remap="RELATIVE_ALL", fake_user=True)
     finally:
@@ -71,6 +76,7 @@ def _blend(rig, path):
 
 
 def _smd(rig, path, animated):
+    distance_scale = state_for(rig).get("export_data_scale", 1.0)
     bones = []
 
     def visit(bone):
@@ -95,7 +101,7 @@ def _smd(rig, path, animated):
         for bone in bones:
             pose = rig.pose.bones[bone.name]
             matrix = pose.parent.matrix.inverted() @ pose.matrix if pose.parent else pose.matrix
-            position, rotation = matrix.translation, matrix.to_euler("XYZ")
+            position, rotation = matrix.translation * distance_scale, matrix.to_euler("XYZ")
             lines.append("%d %.9g %.9g %.9g %.9g %.9g %.9g" % (
                 indices[bone.name], *position, *rotation))
     lines.append("end")
@@ -115,7 +121,7 @@ def _smd(rig, path, animated):
                     lines.append(re.sub(r'\s+', '_', material.name) if material else "default")
                     for loop_index in triangle.loops:
                         vertex = mesh.vertices[mesh.loops[loop_index].vertex_index]
-                        position = transform @ vertex.co
+                        position = (transform @ vertex.co) * distance_scale
                         normal = (normal_transform @ mesh.corner_normals[loop_index].vector).normalized()
                         texture = uv.data[loop_index].uv if uv else (0.0, 0.0)
                         weights = [(indices[obj.vertex_groups[group.group].name], group.weight)
@@ -133,6 +139,11 @@ def _smd(rig, path, animated):
 
 
 def export(rig, settings, stem="viewmodel"):
+    if settings.output_unit == "m":
+        output_plan(settings, stem)
+        from .units import metric_copy
+        with metric_copy(rig) as converted:
+            return export(converted, replace(settings, output_unit="original"), stem)
     verification = verify(rig)
     paths = output_plan(settings, stem)
     state = state_for(rig)
@@ -162,7 +173,8 @@ def export(rig, settings, stem="viewmodel"):
                 if extension == "blend":
                     _blend(rig, staged)
                 elif extension == "cast":
-                    backend().exporter.save(options(incl_animation=animated), bpy.context, str(staged))
+                    backend().exporter.save(options(incl_animation=animated,
+                        scale=state.get("export_data_scale", 1.0)), bpy.context, str(staged))
                 elif extension == "fbx":
                     for obj in assembly_objects(rig):
                         obj.select_set(True)
@@ -173,7 +185,8 @@ def export(rig, settings, stem="viewmodel"):
                             add_leaf_bones=False, use_armature_deform_only=False,
                             bake_anim=animated, bake_anim_use_all_actions=False,
                             bake_anim_use_nla_strips=False, bake_anim_simplify_factor=0.0,
-                            path_mode="AUTO", axis_forward="-Z", axis_up="Y")
+                            path_mode="AUTO", axis_forward="-Z", axis_up="Y",
+                            **({"apply_scale_options": "FBX_SCALE_UNITS"} if state.get("linear_unit") == "m" else {}))
                     if result != {"FINISHED"}:
                         raise RuntimeError("FBX export was cancelled")
                 elif extension == "smd":
@@ -190,6 +203,8 @@ def export(rig, settings, stem="viewmodel"):
         report = {"tool": "CoD Viewmodel Toolkit", "version": VERSION,
                   "blender": bpy.app.version_string, "cast_upstream": "2.00",
                   "verification": verification, "assembly": state,
+                  "linear_unit": state.get("linear_unit", "original"),
+                  "unit_conversion": state.get("output_conversion", {"enabled": False}),
                   "animated": animated, "frame_range": [scene.frame_start, scene.frame_end],
                   "fps": scene.render.fps / scene.render.fps_base,
                   "outputs": outputs, "smd": "skeleton animation" if animated else "static skinned model"}

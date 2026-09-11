@@ -7,12 +7,13 @@ CAST 动画**的组装与批量导出，提供 Maya 和 Blender 两个版本。�
 同一武器复制双持、左右动画合成、独立格式输出目录和 JSON 验证报告。
 兼容性取决于具体骨骼和数据，不代表支持所有使命召唤作品或提取器。
 
-**3.3.0** 新增基于上游 **CAST 2.00** 的 Blender 版本。Maya 提供英文和简体
+**3.4.0** 新增可选的[英尺转米输出](docs/OUTPUT_UNITS.md)。Blender 版本基于
+上游 **CAST 2.00**。Maya 提供英文和简体
 中文包；Blender 目前提供英文原生侧栏。两个平台分别内置项目补丁版 CAST，
 Blender 版不依赖 Maya。
 
-[下载 3.3.0](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/tag/3.3.0)
-· [更新说明](docs/RELEASE_NOTES_3.3.0.md)
+[下载 3.4.0](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/tag/3.4.0)
+· [更新说明](docs/RELEASE_NOTES_3.4.0.md)
 · [Blender 使用说明](docs/BLENDER.zh-CN.md)
 
 ## 选择平台

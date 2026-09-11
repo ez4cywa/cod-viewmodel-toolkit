@@ -5,6 +5,7 @@ blender -b --factory-startup --python-exit-code 1 --python this.py --
 """
 
 from contextlib import redirect_stdout
+import copy
 import hashlib
 import io
 import json
@@ -58,7 +59,9 @@ def differences(expected, actual):
 
 
 def main():
-    hands, weapon, animation, output = sys.argv[sys.argv.index("--") + 1:]
+    arguments = sys.argv[sys.argv.index("--") + 1:]
+    metric = arguments[-1] == "--meters"
+    hands, weapon, animation, output = arguments[:-1] if metric else arguments
     input_hashes = {path: hashlib.sha256(Path(path).read_bytes()).hexdigest()
                     for path in (hands, weapon, animation)}
     preflight = core.preflight(hands, weapon, left=animation)
@@ -68,8 +71,18 @@ def main():
     expected = snapshot(rig, frames)
     verification = core.verify(rig)
     with redirect_stdout(io.StringIO()):
-        result = exporting.export(rig, exporting.ExportOptions(directory=output, fbx=True, smd=True),
+        result = exporting.export(rig, exporting.ExportOptions(directory=output, fbx=True, smd=True,
+                                  output_unit="m" if metric else "original"),
                                   "cod_real_asset")
+    assert differences(expected, snapshot(rig, frames))["bone_max_error"] == 0
+    if metric:
+        for row in expected.values():
+            for name, values in row.items():
+                if name == "mesh_bounds":
+                    row[name] = [[value * 0.3048 for value in bound] for bound in values]
+                else:
+                    for index in (3, 7, 11):
+                        values[index] *= 0.3048
     reports = {}
     for extension in ("fbx", "cast", "blend"):
         path = result["outputs"][extension]
@@ -83,19 +96,29 @@ def main():
             else:
                 bpy.ops.wm.open_mainfile(filepath=path)
         imported = next(obj for obj in bpy.context.scene.objects if obj.type == "ARMATURE")
-        reports[extension] = differences(expected, snapshot(imported, frames))
+        comparison = copy.deepcopy(expected)
+        if metric and extension in ("fbx", "blend"):
+            # Native scene/FBX keep an exact uniform armature-object scale;
+            # CAST applies the distance factor to its numeric position buffers.
+            for row in comparison.values():
+                for name, values in row.items():
+                    if name != "mesh_bounds":
+                        for index in (0, 1, 2, 4, 5, 6, 8, 9, 10):
+                            values[index] *= 0.3048
+        reports[extension] = differences(comparison, snapshot(imported, frames))
         if extension == "fbx":
             for obj in exporting.assembly_objects(imported):
                 for modifier in obj.modifiers:
                     if modifier.type == "ARMATURE":
                         modifier.use_deform_preserve_volume = True
-            reports["fbx_dqs"] = differences(expected, snapshot(imported, frames))
+            reports["fbx_dqs"] = differences(comparison, snapshot(imported, frames))
     assert input_hashes == {path: hashlib.sha256(Path(path).read_bytes()).hexdigest()
                             for path in input_hashes}
     summary = {"blender": bpy.app.version_string, "hands_bones": len(preflight["hands"]["bones"]),
                "weapon_bones": len(preflight["weapon"]["bones"]),
                "frames": end + 1, "sampled_frames": frames,
                "verification": verification, "roundtrip": reports,
+               "unit_conversion": result["unit_conversion"],
                "manifest": result["manifest"], "inputs_unchanged": True}
     Path(output, "real_asset_verification.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
     print("BLENDER_REAL_ASSET_RESULT", json.dumps(summary))

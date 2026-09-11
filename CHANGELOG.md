@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented here.
 
+## [3.4.0] - 2026-09-11
+
+- Optional ft-to-meter output copies for Maya and Blender, with original behavior as the default.
+- Native meter scenes, numeric-meter CAST/SMD, correctly sized FBX, conversion reports and repeat-export protection. Maya FBX retains centimeter storage metadata; see `docs/OUTPUT_UNITS.md`.
+- Preserve source scenes and foot-valued inputs. Fix Maya repeated clip imports when existing animation curves are reused.
+
 ## [3.3.0] - 2026-09-11
 
 - Renamed the cross-platform project to CoD Viewmodel Toolkit, focused on

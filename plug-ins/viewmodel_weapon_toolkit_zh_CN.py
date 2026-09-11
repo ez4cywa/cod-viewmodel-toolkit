@@ -1,4 +1,4 @@
-"""Simplified Chinese entry point for CoD Viewmodel Toolkit 3.3.0.
+"""Simplified Chinese entry point for CoD Viewmodel Toolkit 3.4.0.
 
 This file reuses the English implementation beside it and localizes Maya UI
 text at the command boundary. Technical identifiers, joint names, file
@@ -17,7 +17,7 @@ import sys
 import maya.cmds as _maya_cmds
 
 
-VERSION = "3.3.0"
+VERSION = "3.4.0"
 _LOADER_FILE = globals().get("__file__") or sys._getframe().f_code.co_filename
 _CORE_PATH = os.path.join(
     os.path.dirname(os.path.abspath(_LOADER_FILE)),
@@ -27,6 +27,11 @@ _CORE_MODULE_NAME = "viewmodel_weapon_toolkit_zh_cn_core"
 
 
 _EXACT_TRANSLATIONS = {
+    "Output unit:": "输出单位：",
+    "Keep original": "保持原样",
+    "Meters (input: ft)": "米（输入：ft）",
+    "Meters converts an export copy: 1 ft = 0.3048 m. The working scene is unchanged.":
+        "仅转换导出副本：1 ft = 0.3048 m，不改变当前工作场景。",
     "Source files": "输入文件",
     "Joint mapping": "关节映射",
     "Joint mapping and reference pose": "关节映射与参考姿态",

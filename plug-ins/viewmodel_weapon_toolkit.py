@@ -87,7 +87,7 @@ COMMAND_NAME = "viewmodelWeaponToolkit"
 LEGACY_COMMAND_NAME = "attachGun"
 WINDOW_NAME = "ViewmodelWeaponToolkitWindow"
 DUAL_WINDOW_NAME = "ViewmodelWeaponToolkitDualWindow"
-VERSION = "3.3.0"
+VERSION = "3.4.0"
 
 VIEWHANDS_OPTVAR = "attachGun_viewhandsPath"
 OUTPUT_DIR_OPTVAR = "attachGun_outputDir"
@@ -102,6 +102,7 @@ EXPORT_MA_OPTVAR = "attachGun_exportMa"
 EXPORT_CAST_OPTVAR = "attachGun_exportCast"
 EXPORT_SMD_OPTVAR = "attachGun_exportSmd"
 EXPORT_FBX_OPTVAR = "attachGun_exportFbx"
+OUTPUT_UNIT_OPTVAR = "codViewmodel_outputUnit"
 AUTO_SAFE_DROP_OPTVAR = "attachGun_autoSafeCastAnimationDrop"
 DUAL_VIEWHANDS_OPTVAR = "attachGun_dualViewhandsPath"
 DUAL_WEAPON_OPTVAR = "attachGun_dualWeaponPath"
@@ -124,6 +125,7 @@ EXPORT_MA_CHECK = "attachGun_exportMaCheck"
 EXPORT_CAST_CHECK = "attachGun_exportCastCheck"
 EXPORT_SMD_CHECK = "attachGun_exportSmdCheck"
 EXPORT_FBX_CHECK = "attachGun_exportFbxCheck"
+OUTPUT_UNIT_MENU = "codViewmodel_outputUnitMenu"
 DUAL_VIEWHANDS_FIELD = "attachGun_dualViewhandsField"
 DUAL_WEAPON_FIELD = "attachGun_dualWeaponField"
 DUAL_LEFT_ANIMATION_FIELD = "attachGun_dualLeftAnimationField"
@@ -141,6 +143,20 @@ _CAST_BATCH_MODULE = None
 _CAST_TRANSLATOR_FALLBACK_REGISTERED = False
 _CAST_DROP_CALLBACK = None
 _TOOLKIT_PLUGIN_PATH = ""
+_UNITS_MODULE = None
+_OUTPUT_IN_METERS = False
+
+
+def _units_module():
+    global _UNITS_MODULE
+    if _UNITS_MODULE is None:
+        path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cod_viewmodel_units.py")
+        spec = importlib.util.spec_from_file_location(__name__ + "_units", path)
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[spec.name] = module
+        spec.loader.exec_module(module)
+        _UNITS_MODULE = module
+    return _UNITS_MODULE
 
 
 @dataclass
@@ -163,6 +179,7 @@ class AttachOptions:
     smd_output_dir: str = ""
     fbx_output_dir: str = ""
     export_animation: bool = False
+    output_unit: str = "original"
 
 
 @dataclass
@@ -220,6 +237,7 @@ class AttachResult:
     animation_verification: dict = field(default_factory=dict)
     output_errors: dict = field(default_factory=dict)
     skinning_method: str = ""
+    unit_conversion: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -318,6 +336,7 @@ def load_saved_options(force_new_scene=False):
         export_cast=_load_bool_option(EXPORT_CAST_OPTVAR, True),
         export_smd=_load_bool_option(EXPORT_SMD_OPTVAR, False),
         export_fbx=_load_bool_option(EXPORT_FBX_OPTVAR, False),
+        output_unit=_load_string_option(OUTPUT_UNIT_OPTVAR, "original"),
         force_new_scene=force_new_scene,
     )
 
@@ -336,6 +355,7 @@ def save_options(viewhands_path, options):
     _save_bool_option(EXPORT_CAST_OPTVAR, options.export_cast)
     _save_bool_option(EXPORT_SMD_OPTVAR, options.export_smd)
     _save_bool_option(EXPORT_FBX_OPTVAR, options.export_fbx)
+    _save_string_option(OUTPUT_UNIT_OPTVAR, options.output_unit)
 
 
 def clear_saved_settings():
@@ -353,6 +373,7 @@ def clear_saved_settings():
             EXPORT_CAST_OPTVAR,
             EXPORT_SMD_OPTVAR,
             EXPORT_FBX_OPTVAR,
+            OUTPUT_UNIT_OPTVAR,
             AUTO_SAFE_DROP_OPTVAR,
             DUAL_VIEWHANDS_OPTVAR,
             DUAL_WEAPON_OPTVAR,
@@ -1583,6 +1604,8 @@ def verify_exported_fbx(path):
         "path": path,
         "size": os.path.getsize(path),
         "format": file_format,
+        **({"distance_conversion": "ft_to_m", "fbx_storage_unit": "cm",
+            "physical_size_preserved": True} if _OUTPUT_IN_METERS else {}),
     }
 
 
@@ -1999,12 +2022,24 @@ def _route_dual_animation_names(state, side, selected_hand_names):
                 % "; ".join(restore_errors))
 
 
+@contextmanager
 def _temporary_cast_animation_settings(import_at_time=False):
-    return _temporary_cast_settings({
-        "importAtTime": bool(import_at_time),
-        "importReset": False,
-        "importLooping": False,
-    })
+    restored, seen = [], set()
+    with _temporary_cast_settings({"importAtTime": bool(import_at_time),
+                                   "importReset": False, "importLooping": False}):
+        try:
+            if _units_module().scene_is_metric():
+                for module in _loaded_castplugin_modules():
+                    runtime = getattr(module, "runtimeSettings", None)
+                    if runtime is not None and id(runtime) not in seen:
+                        seen.add(id(runtime))
+                        old = runtime.get("retargetScale", 1.0)
+                        restored.append((runtime, old))
+                        runtime["retargetScale"] = old * 30.48
+            yield
+        finally:
+            for runtime, old in restored:
+                runtime["retargetScale"] = old
 
 
 def _cast_animation_import_options(import_at_time=False):
@@ -2078,6 +2113,10 @@ def _apply_reference_pose_compensation(
     """Shift imported target translation keys within one clip range."""
     attribute_offsets = dict(
         side_compensation.get("attribute_offsets", {}))
+    if _units_module().scene_is_metric():
+        factor = OpenMaya.MDistance(30.48, OpenMaya.MDistance.kCentimeters).asUnits(
+            OpenMaya.MDistance.uiUnit())
+        attribute_offsets = {name: value * factor for name, value in attribute_offsets.items()}
     report = {
         "enabled": bool(attribute_offsets),
         "target_node": target_node,
@@ -2331,6 +2370,8 @@ def selected_output_formats(options):
 
 
 def validate_output_options(options):
+    if options.output_unit not in ("original", "m"):
+        raise RuntimeError("Output unit must be original or m")
     """Reject a run that would produce no user-selected output file."""
     formats = selected_output_formats(options)
     if not formats:
@@ -2456,6 +2497,10 @@ def _export_model_cast(path, result, verify=True):
         )
     if not os.path.isfile(path) or os.path.getsize(path) <= 0:
         raise RuntimeError("Combined Cast was not written correctly: %s" % path)
+    if _OUTPUT_IN_METERS:
+        serializer = sys.modules[_castplugin_module().Cast.__module__]
+        document = serializer.Cast.load(path)
+        _units_module().scale_cast(document, serializer, model_factor=0.01).save(path)
     if verify:
         left_report = verify_exported_cast(
             path, result.source_joint_name, result.target_joint_name)
@@ -2512,7 +2557,7 @@ def _allocate_result_output_paths(result, output_dir, options):
 
 def _export_result_smd(result):
     """Export SMD through Maya when available, otherwise via model Cast."""
-    report, translator_error = _try_registered_smd_export(
+    report, translator_error = (None, "") if _OUTPUT_IN_METERS else _try_registered_smd_export(
         result.output_smd,
         result.source_joint_name,
         result.target_joint_name,
@@ -2579,6 +2624,8 @@ def _export_result_smd(result):
 
 def _write_result_outputs(result, options, allocate=True):
     """Write every selected output using one shared versioned basename."""
+    if options.output_unit == "m":
+        return _units_module().export_copy(sys.modules[__name__], result, options, allocate)
     if result.animated_outputs:
         return _write_animation_outputs(result, options, allocate=allocate)
     validate_output_options(options)
@@ -3735,7 +3782,9 @@ def export_smd_animation(path, frame_range):
                         rotation = rotation.closestSolution(previous_rotations[index])
                     previous_rotations[index] = rotation
                     stream.write("%d %.9g %.9g %.9g %.9g %.9g %.9g\n" % (
-                        index, position.x, position.y, position.z,
+                        index, position.x * (0.01 if _OUTPUT_IN_METERS else 1.0),
+                        position.y * (0.01 if _OUTPUT_IN_METERS else 1.0),
+                        position.z * (0.01 if _OUTPUT_IN_METERS else 1.0),
                         rotation.x, rotation.y, rotation.z))
             stream.write("end\n")
     finally:
@@ -3745,12 +3794,14 @@ def export_smd_animation(path, frame_range):
         "bone_count": len(records), "animation_included": True,
         "frame_count": frame_range[1] - frame_range[0] + 1,
         "source_frame_range": list(frame_range), "start_frame": 0,
-        "mesh_included": False, "linear_unit": "cm", "rotation_unit": "radian",
+        "mesh_included": False, "linear_unit": "m" if _OUTPUT_IN_METERS else "cm", "rotation_unit": "radian",
     }
 
 
 def _write_animation_outputs(result, options, allocate=True):
     """Write selected animated formats and record independent format failures."""
+    if options.output_unit == "m":
+        return _units_module().export_copy(sys.modules[__name__], result, options, allocate)
     validate_output_options(options)
     result.frame_range = _animation_export_range(result.frame_range)
     result.framerate = float(_castplugin_module().utilityUnitToFramerate(
@@ -4022,6 +4073,18 @@ def import_animation_file(animation_path,
                 anim_curves.append(node)
         except Exception:
             pass
+    # Re-import can reuse existing curves, so returnNewNodes is not a complete
+    # list of animation targets (notably when reopening a metric output MA).
+    for record in _cast_animation_inventory(animation_path)["curve_records"]:
+        targets = ([_node_from_uuid(hand_uuid)] if record["node"] == source_joint else
+                   cmds.ls(record["node"], type="joint", long=True) or [])
+        attribute = "rotate" if record["property"] == "rq" else record["property"]
+        if len(targets) == 1 and cmds.objExists(targets[0] + "." + attribute):
+            anim_curves.extend(cmds.listConnections(targets[0] + "." + attribute,
+                source=True, destination=False, type="animCurve") or [])
+    anim_curves = sorted(set(anim_curves))
+    if not anim_curves:
+        raise RuntimeError("Imported animation created no matching keyframes")
     animation_range = _curve_time_range(anim_curves)
     playback_range = _set_playback_range_from_curves(anim_curves)
 
@@ -4362,6 +4425,7 @@ def save_current_result():
         export_cast=bool(requested.get("cast")),
         export_smd=bool(requested.get("smd")),
         export_fbx=bool(requested.get("fbx")),
+        output_unit="m" if _LAST_RESULT.unit_conversion.get("output_unit") == "m" else "original",
     )
     _write_result_outputs(_LAST_RESULT, options, allocate=False)
     if _LAST_RESULT.output_errors:
@@ -4513,6 +4577,12 @@ def _ui_actions(actions, primary=None):
 
 def _ui_output_options(saved, batch=False, dual=False):
     with _ui_section("Output files"):
+        _ui_text("Output unit:")
+        cmds.optionMenu(OUTPUT_UNIT_MENU, height=32)
+        cmds.menuItem(label="Keep original")
+        cmds.menuItem(label="Meters (input: ft)")
+        cmds.optionMenu(OUTPUT_UNIT_MENU, edit=True, select=2 if saved.output_unit == "m" else 1)
+        _ui_text("Meters converts an export copy: 1 ft = 0.3048 m. The working scene is unchanged.")
         _ui_path_row("Manifest/default:", OUTPUT_DIR_FIELD, saved.output_dir,
                      lambda *_: _browse_output_dir(
                          OUTPUT_DIR_FIELD, "manifest/default output"))
@@ -4739,8 +4809,15 @@ def _dialog_options(force_new_scene=False):
         export_cast=_check_box_value(EXPORT_CAST_CHECK, saved.export_cast),
         export_smd=_check_box_value(EXPORT_SMD_CHECK, saved.export_smd),
         export_fbx=_check_box_value(EXPORT_FBX_CHECK, saved.export_fbx),
+        output_unit=_output_unit_ui_value(saved.output_unit),
         force_new_scene=force_new_scene,
     )
+
+
+def _output_unit_ui_value(default="original"):
+    if cmds.optionMenu(OUTPUT_UNIT_MENU, exists=True):
+        return "m" if cmds.optionMenu(OUTPUT_UNIT_MENU, query=True, select=True) == 2 else "original"
+    return default
 
 
 def _browse_cast(target_field):
@@ -5157,6 +5234,7 @@ def _dual_dialog_options(force_new_scene=False):
         export_cast=_check_box_value(EXPORT_CAST_CHECK, saved.export_cast),
         export_smd=_check_box_value(EXPORT_SMD_CHECK, saved.export_smd),
         export_fbx=_check_box_value(EXPORT_FBX_CHECK, saved.export_fbx),
+        output_unit=_output_unit_ui_value(saved.output_unit),
         animation_mode=_dual_mode_ui_value(),
         shared_hands_source="right",
         reference_pose_path=_field_text(DUAL_REFERENCE_POSE_FIELD, ""),

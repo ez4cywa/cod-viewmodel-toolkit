@@ -16,11 +16,11 @@ def build(output):
     output.mkdir(parents=True, exist_ok=True)
     common = {name: name for name in (
         "CHANGELOG.md", "LICENSE", "README.md", "README.zh-CN.md",
-        "SECURITY.md", "THIRD_PARTY_NOTICES.md",
-        "plug-ins/viewmodel_weapon_toolkit.py", "third_party/cast/LICENSE",
+        "SECURITY.md", "THIRD_PARTY_NOTICES.md", "docs/OUTPUT_UNITS.md", "docs/VERIFICATION_3.4.0.md",
+        "plug-ins/viewmodel_weapon_toolkit.py", "plug-ins/cod_viewmodel_units.py", "third_party/cast/LICENSE",
         "third_party/cast/PATCHES.md", "docs/BATCH_ANIMATION_VERIFICATION.md",
         "docs/VERIFICATION_3.2.0.md", "docs/RELEASE_NOTES_3.2.0.md",
-        "docs/VERIFICATION_3.3.0.md", "docs/RELEASE_NOTES_3.3.0.md",
+        "docs/VERIFICATION_3.3.0.md", "docs/RELEASE_NOTES_3.3.0.md", "docs/RELEASE_NOTES_3.4.0.md",
         "docs/BLENDER.md", "docs/BLENDER.zh-CN.md")}
     for name in ("cast.py", "castplugin.py"):
         common["plug-ins/" + name] = "third_party/cast/" + name
@@ -46,7 +46,7 @@ def build(output):
                 and target.id == "bl_info" for target in node.targets))
     assert ".".join(map(str, info["version"])) == version
     files = {name + ".py": "blender/cod_viewmodel_toolkit/" + name + ".py"
-             for name in ("__init__", "backend", "core", "animation", "exporting", "fbx", "ui")}
+             for name in ("__init__", "backend", "core", "animation", "exporting", "fbx", "ui", "units")}
     for name in ("__init__.py", "import_cast.py", "export_cast.py", "shared_cast.py", "PATCHES.md"):
         files["vendor_cast/" + name] = "third_party/cast_blender/" + name
     files["vendor_cast/cast.py"] = "third_party/cast/cast.py"
@@ -56,8 +56,8 @@ def build(output):
                  "third_party/cast_blender/PATCHES.md",
                  "docs/BLENDER.md", "docs/BLENDER.zh-CN.md", "docs/VERIFICATION_3.3.0.md",
                  "docs/VERIFICATION_3.2.0.md", "docs/RELEASE_NOTES_3.2.0.md",
-                 "docs/BATCH_ANIMATION_VERIFICATION.md",
-                 "docs/RELEASE_NOTES_3.3.0.md"):
+                 "docs/BATCH_ANIMATION_VERIFICATION.md", "docs/OUTPUT_UNITS.md", "docs/VERIFICATION_3.4.0.md",
+                 "docs/RELEASE_NOTES_3.3.0.md", "docs/RELEASE_NOTES_3.4.0.md"):
         files[name] = name
     archive = output / ("cod-viewmodel-toolkit-%s-blender-en.zip" % version)
     with zipfile.ZipFile(str(archive), "x", zipfile.ZIP_DEFLATED) as bundle:

@@ -26,6 +26,8 @@ def same_path(left, right):
 def main(package, edition):
     package = Path(package).resolve()
     plugin_dir = package / "plug-ins"
+    assert (plugin_dir / "cod_viewmodel_units.py").is_file()
+    assert (package / "docs/OUTPUT_UNITS.md").is_file()
     expected = {
         "CHANGELOG.md", "LICENSE", "README.md", "README.zh-CN.md",
         "SECURITY.md", "THIRD_PARTY_NOTICES.md", "plug-ins", "third_party",
@@ -48,7 +50,7 @@ def main(package, edition):
                           if edition == "zh-CN" else "viewmodel_weapon_toolkit.py")
     plugin_name = entry.stem
     cmds.loadPlugin(str(entry), quiet=True)
-    assert str(cmds.pluginInfo(plugin_name, query=True, version=True)) == "3.3.0"
+    assert str(cmds.pluginInfo(plugin_name, query=True, version=True)) == "3.4.0"
     assert hasattr(cmds, "viewmodelWeaponToolkit") and hasattr(cmds, "attachGun")
     # In Maya Batch the toolkit owns the fallback translator registration;
     # castplugin.py is loaded as the adjacent implementation module.

@@ -40,6 +40,9 @@ class CODVWT_Settings(bpy.types.PropertyGroup):
         ("simultaneous", "Simultaneous", "Both sides play together; shared hand/root tracks use the right clip"),
         ("sequential", "Sequential", "Right clip starts after the left; each side holds its end pose")))
     directory: StringProperty(name="Default Output", subtype="DIR_PATH")
+    output_unit: EnumProperty(name="Output Unit", items=(
+        ("original", "Keep Original", "Do not convert output dimensions"),
+        ("m", "Meters (Input: ft)", "Convert an export copy: 1 ft = 0.3048 m; keep the source scene unchanged")))
     blend: BoolProperty(name="Blender Scene (.blend)", default=True)
     cast: BoolProperty(name="CAST Model + Animation", default=True)
     fbx: BoolProperty(name="FBX Model + Animation", default=False)
@@ -66,6 +69,7 @@ def export_settings(props):
     return exporting.ExportOptions(
         directory=props.directory, blend=props.blend, cast=props.cast,
         fbx=props.fbx, smd=props.smd,
+        output_unit=props.output_unit,
         folders={name: getattr(props, name + "_dir") for name in ("blend", "cast", "fbx", "smd")})
 
 
@@ -333,7 +337,7 @@ def file_field(layout, props, name, label=None):
 
 
 class CODVWT_PT_main(bpy.types.Panel):
-    bl_label = "CoD Viewmodel Toolkit 3.3.0"
+    bl_label = "CoD Viewmodel Toolkit 3.4.0"
     bl_idname = "CODVWT_PT_main"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
@@ -387,6 +391,9 @@ class CODVWT_PT_output(bpy.types.Panel):
         layout, p = self.layout, context.scene.cod_vwt
         layout.enabled = _RUNNING is None
         file_field(layout, p, "directory")
+        layout.prop(p, "output_unit", text="Unit")
+        if p.output_unit == "m":
+            message(layout, context, "Export copy only: 1 ft = 0.3048 m. Already-metric assemblies are not scaled again.")
         for extension in ("blend", "cast", "fbx", "smd"):
             layout.prop(p, extension)
             row = layout.row()
