@@ -1,4 +1,4 @@
-"""Simplified Chinese entry point for Maya Viewmodel Weapon Toolkit 3.2.0.
+"""Simplified Chinese entry point for CoD Viewmodel Toolkit 3.3.0.
 
 This file reuses the English implementation beside it and localizes Maya UI
 text at the command boundary. Technical identifiers, joint names, file
@@ -17,7 +17,7 @@ import sys
 import maya.cmds as _maya_cmds
 
 
-VERSION = "3.2.0"
+VERSION = "3.3.0"
 _LOADER_FILE = globals().get("__file__") or sys._getframe().f_code.co_filename
 _CORE_PATH = os.path.join(
     os.path.dirname(os.path.abspath(_LOADER_FILE)),
@@ -64,7 +64,7 @@ _EXACT_TRANSLATIONS = {
     "Select animations": "选择多个动画",
     "Select left animations": "选择多个左侧动画",
     "Select right animations (same order)": "按对应顺序选择右侧动画",
-    "Viewmodel Weapon Toolkit": "视角模型武器工具包",
+    "CoD Viewmodel Toolkit": "CoD 视角模型工具包",
     "Select": "选择",
     "Save": "保存",
     "Discard": "放弃更改",
@@ -114,8 +114,8 @@ _EXACT_TRANSLATIONS = {
     "Clear Saved Settings": "清除已保存设置",
     "Starting...": "正在开始…",
     "Safely route pure animation CAST files dropped onto a "
-    "Viewmodel Weapon Toolkit scene.":
-        "安全处理拖入到视角模型武器工具包场景中的纯动画 CAST 文件。",
+    "CoD Viewmodel Toolkit scene.":
+        "安全处理拖入到CoD 视角模型工具包场景中的纯动画 CAST 文件。",
 }
 
 
@@ -175,7 +175,7 @@ _PHRASE_TRANSLATIONS = (
     ("\nPartial:", "\n部分成功："),
     ("\nFailed:", "\n失败："),
     ("\nReport:", "\n报告："),
-    ("About Viewmodel Weapon Toolkit", "关于视角模型武器工具包"),
+    ("About CoD Viewmodel Toolkit", "关于CoD 视角模型工具包"),
     (" - File Browser", " - 文件浏览器"),
     (" - Unsaved Scene", " - 未保存场景"),
     (" - Save Scene", " - 保存场景"),
@@ -280,8 +280,8 @@ _PHRASE_TRANSLATIONS = (
      "提供预检、挂接、批处理、保存和验证功能。"),
     ("Duplicate one weapon and compose left/right Akimbo animations.",
      "复制一个武器并合成左右双持动画。"),
-    ("Saved Viewmodel Weapon Toolkit settings cleared.",
-     "已清除视角模型武器工具包的保存设置。"),
+    ("Saved CoD Viewmodel Toolkit settings cleared.",
+     "已清除CoD 视角模型工具包的保存设置。"),
     ("Dual mode duplicates one weapon onto tag_weapon_left/right.",
      "双持模式会复制一个武器并挂到 tag_weapon_left/right。"),
     ("It does not combine two different weapon skeletons.",
@@ -304,7 +304,7 @@ _PHRASE_TRANSLATIONS = (
     ("Select replacement right animation", "选择要替换的右侧动画"),
     ("Select weapon .cast files (one output set per weapon)",
      "选择武器 .cast 文件（每个武器生成一组输出）"),
-    ("Viewmodel Weapon Toolkit", "视角模型武器工具包"),
+    ("CoD Viewmodel Toolkit", "CoD 视角模型工具包"),
 )
 
 

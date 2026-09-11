@@ -33,8 +33,8 @@ def _assert_loaded(path, plugin_name):
     version = str(cmds.pluginInfo(plugin_name, query=True, version=True))
     if not _same_path(loaded_path, path):
         raise RuntimeError("Maya loaded the wrong path: %s" % loaded_path)
-    if version != "3.2.0":
-        raise RuntimeError("Expected version 3.2.0, got %s" % version)
+    if version != "3.3.0":
+        raise RuntimeError("Expected version 3.3.0, got %s" % version)
     if not hasattr(cmds, "viewmodelWeaponToolkit"):
         raise RuntimeError("viewmodelWeaponToolkit command is missing")
     if not hasattr(cmds, "attachGun"):
@@ -174,7 +174,7 @@ def main():
     primary_module = _module_from_path(PRIMARY)
     about = primary_module._about_message()
     required_about = (
-        "Maya Viewmodel Weapon Toolkit v3.2.0",
+        "CoD Viewmodel Toolkit v3.3.0",
         "WORKFLOWS",
         "ANIMATION & EXPORT",
         "DQS skinning",
@@ -203,17 +203,17 @@ def main():
     chinese_core = sys.modules.get("viewmodel_weapon_toolkit_zh_cn_core")
     if chinese_core is None:
         raise RuntimeError("Chinese shared core module is unavailable")
-    if chinese_core.VERSION != "3.2.0":
+    if chinese_core.VERSION != "3.3.0":
         raise RuntimeError("Chinese core changed the release version")
     translator = chinese_core.cmds._commands
     if translator is not cmds:
         raise RuntimeError("Chinese UI proxy is not attached to maya.cmds")
-    if chinese_core._zh_cn_entry_version != "3.2.0":
+    if chinese_core._zh_cn_entry_version != "3.3.0":
         raise RuntimeError("Chinese entry point changed the release version")
     translate_ui_text = chinese_core._zh_cn_translate_ui_text
     localized_about = translate_ui_text(chinese_core._about_message())
     required_localized_about = (
-        "视角模型武器工具包 v3.2.0",
+        "CoD 视角模型工具包 v3.3.0",
         "主要流程",
         "动画与导出",
         "DQS 蒙皮",
@@ -245,7 +245,7 @@ def main():
     fake_commands = _FakeDialogCommands()
     proxy = type(chinese_core.cmds)(fake_commands)
     response = proxy.confirmDialog(
-        title="Viewmodel Weapon Toolkit - Unsaved Scene",
+        title="CoD Viewmodel Toolkit - Unsaved Scene",
         message="Failed:\nexample",
         button=["Save", "Cancel"],
         defaultButton="Save",
@@ -256,7 +256,7 @@ def main():
     if fake_commands.keywords["button"] != ["保存", "取消"]:
         raise RuntimeError("Localized dialog buttons are incorrect")
     if fake_commands.keywords["title"] != \
-            "视角模型武器工具包 - 未保存场景":
+            "CoD 视角模型工具包 - 未保存场景":
         raise RuntimeError("Localized dialog title is incorrect")
     file_dialog_result = proxy.fileDialog2(
         caption="Select .cast file",

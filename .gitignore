@@ -6,6 +6,8 @@ cast.cfg
 # Maya and DCC outputs
 *.ma
 *.mb
+*.blend
+*.blend1
 *.cast
 *.smd
 *.fbx

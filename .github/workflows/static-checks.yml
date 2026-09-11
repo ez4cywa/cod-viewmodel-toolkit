@@ -13,13 +13,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Compile Python sources
-        run: python -m py_compile plug-ins/*.py tests/*.py third_party/cast/*.py
+        run: python -m py_compile plug-ins/*.py tests/*.py scripts/*.py third_party/cast/*.py third_party/cast_blender/*.py blender/cod_viewmodel_toolkit/*.py
       - name: Verify bundled CAST translator
         run: python tests/verify_vendored_cast.py
+      - name: Verify bundled Blender CAST backend
+        run: python tests/verify_vendored_blender_cast.py
       - name: Reject generated assets
         shell: bash
         run: |
-          if find . -type f \( -name '*.ma' -o -name '*.mb' -o -name '*.cast' -o -name '*.smd' -o -name '*.fbx' -o -name '*.zip' -o -name '*.bak' \) | grep -q .; then
+          if find . -type f \( -name '*.ma' -o -name '*.mb' -o -name '*.blend' -o -name '*.cast' -o -name '*.smd' -o -name '*.fbx' -o -name '*.zip' -o -name '*.bak' \) | grep -q .; then
             echo 'Generated asset found in repository.'
             exit 1
           fi

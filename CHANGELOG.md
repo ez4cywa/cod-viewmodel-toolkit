@@ -2,6 +2,24 @@
 
 All notable changes to this project are documented here.
 
+## [3.3.0] - 2026-09-11
+
+- Renamed the cross-platform project to CoD Viewmodel Toolkit, focused on
+  Call of Duty first-person CAST workflows. Maya loader filenames, commands
+  and saved settings remain compatible.
+- Added an independent Blender 5.2+ edition using pinned upstream CAST 2.00:
+  single/dual assembly, routed skeletal animation, sequential/simultaneous
+  playback, single-side replacement and reference-pose translation compensation.
+- Added scoped BLEND/CAST/FBX/SMD exports, per-format directories, versioned
+  outputs and cancellable batch queues with per-item failure reports.
+- Patched Blender CAST combined-file animation targeting and segment-scale
+  export. Added a scoped double-precision FBX rotation adapter for near-90°
+  CoD skeleton orientations; documented receiving-side DQS requirements.
+- Added native English Blender panels, Chinese/English guides, synthetic
+  regressions, real single-weapon round-trip checks and backend hash checks.
+- Release ZIPs now identify platform and language: Maya EN, Maya ZH-CN,
+  Blender EN. Blender packages do not include or require Maya.
+
 ## [3.2.0] - 2026-09-11
 
 - Updated the bundled Maya CAST translator to upstream v2.00, retaining

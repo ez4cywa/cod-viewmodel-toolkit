@@ -1,23 +1,30 @@
-# Maya Viewmodel Weapon Toolkit
+# CoD Viewmodel Toolkit
 
 [English](README.md)
 
-Maya Viewmodel Weapon Toolkit 将 CAST 手臂、武器和动画组合成第一人称场景，
-并完成批量导出。支持单武器、同一武器复制双持和左右动画合成，可分别设置
-MA、CAST、SMD、FBX 的输出目录，并生成 JSON 验证报告。
+CoD Viewmodel Toolkit 主要用于**使命召唤（Call of Duty）第一人称手臂、武器和
+CAST 动画**的组装与批量导出，提供 Maya 和 Blender 两个版本。支持单武器、
+同一武器复制双持、左右动画合成、独立格式输出目录和 JSON 验证报告。
+兼容性取决于具体骨骼和数据，不代表支持所有使命召唤作品或提取器。
 
-**3.2.0** 内置项目补丁版 **CAST 2.00**，提供英文和简体中文界面。窗口支持
-缩放与滚动，设置按用途分组，控件具有描述性标签和清晰的键盘焦点。
-适用于 Python 3 模式的 Maya 2022+；运行验证环境为 Windows 版 Maya 2025。
+**3.3.0** 新增基于上游 **CAST 2.00** 的 Blender 版本。Maya 提供英文和简体
+中文包；Blender 目前提供英文原生侧栏。两个平台分别内置项目补丁版 CAST，
+Blender 版不依赖 Maya。
 
-[下载 3.2.0](https://github.com/ez4cywa/maya-viewmodel-weapon-toolkit/releases/tag/3.2.0)
-· [更新说明](docs/RELEASE_NOTES_3.2.0.md)
+[下载 3.3.0](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/tag/3.3.0)
+· [更新说明](docs/RELEASE_NOTES_3.3.0.md)
+· [Blender 使用说明](docs/BLENDER.zh-CN.md)
 
-## 3.2.0 更新重点
+## 选择平台
 
-- 预检与动画路由统一适配 CAST 2.00 的名称清理规则；有歧义的关节名称会在导入前报错。
-- 单武器和双持窗口可滚动，主要操作保持可见；控件字号不小于 10 点，焦点字段自动滚入可见区域。
-- 未勾选格式的输出目录保留原值；空队列提示下一步操作。中英文版本复用同一套实现。
+| 版本 | 已验证环境 | 场景格式 | 发布包后缀 |
+| --- | --- | --- | --- |
+| Maya 英文／简体中文 | Windows Maya 2025；目标 Maya 2022+ Python 3 | `.ma` | `maya-en` / `maya-zh-CN` |
+| Blender 英文 | Windows Blender 5.2.1 LTS；要求 Blender 5.2+ | `.blend` 组装场景 | `blender-en` |
+
+两个平台均支持单／双持、骨骼动画合成、单侧替换、批量队列以及 CAST、FBX、
+SMD 导出。平台间的导入和场景编辑行为并非完全相同。Blender 安装、限制和
+操作流程见 [Blender 使用说明](docs/BLENDER.zh-CN.md)。**下文为 Maya 版说明。**
 
 ## 主要功能
 
@@ -68,8 +75,8 @@ MA、CAST、SMD、FBX 的输出目录，并生成 JSON 验证报告。
    自动加载，只启用中文入口。
 4. 英文版在 Maya 插件管理器中加载 `viewmodel_weapon_toolkit.py`；简体
    中文版加载 `viewmodel_weapon_toolkit_zh_CN.py`。
-5. 从 Maya 主菜单打开 **Viewmodel Weapon Toolkit**（英文版）或
-   **视角模型武器工具包**（中文版）。
+5. 从 Maya 主菜单打开 **CoD Viewmodel Toolkit**（英文版）或
+   **CoD 视角模型工具包**（中文版）。
 
 如果使用源码仓库，请将 `third_party/cast/cast.py` 和
 `third_party/cast/castplugin.py` 与所选工具包入口文件放在同一插件目录。
@@ -172,7 +179,7 @@ Windows 或 Linux 版 Maya 2022 也可以用 Python 2 模式启动；本工具�
 Python 3 模式下运行。Maya 2021 及更早版本不受支持。最低版本结论来自代码
 语法与 API 兼容性判断，不代表已在 Maya 2022 中运行完整资产回归。
 
-3.2.0 保留旧文件名入口、`attachGun` 命令、OptionVar 和双持场景元数据，原有
+3.3.0 保留旧文件名入口、`attachGun` 命令、OptionVar 和双持场景元数据，原有
 场景与 Maya 偏好可以继续使用。
 
 ## 测试
@@ -192,7 +199,7 @@ mayapy tests/verify_cast_v200.py
 具体覆盖范围见[批量导出验证记录](docs/BATCH_ANIMATION_VERIFICATION.md)。
 CAST 2.00 与原生界面检查见 [3.2.0 验证记录](docs/VERIFICATION_3.2.0.md)。
 
-使用 `python scripts/build_release.py <output-dir>` 构建两个语言的安装包。
+使用 `python scripts/build_release.py <output-dir>` 构建三个平台／语言安装包。
 
 ## 许可证
 

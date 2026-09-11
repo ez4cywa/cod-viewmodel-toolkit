@@ -1,4 +1,4 @@
-r"""Maya Viewmodel Weapon Toolkit plugin for Maya 2022 and newer.
+r"""CoD Viewmodel Toolkit plugin for Maya 2022 and newer.
 
 Python 3 mode is required. The minimum compatibility target is Maya 2022
 with Python 3.7.7; the release is verified on Maya 2025 for Windows.
@@ -31,7 +31,7 @@ Single/dual animation queues export selected animated formats with DQS
 skinning. Animated CAST keeps the assembled rest model, and SMD exports
 skeletal frames only. Each queue item is isolated from previous animation.
 
-Load this file through Maya's Plug-in Manager. A ``Viewmodel Weapon Toolkit``
+Load this file through Maya's Plug-in Manager. A ``CoD Viewmodel Toolkit``
 menu appears in the main menu bar. The legacy ``attach_gun.py`` loader and
 ``attachGun`` command remain supported for existing installations.
 """
@@ -65,8 +65,8 @@ DEFAULT_SOURCE_JOINT = "j_gun"
 DEFAULT_TARGET_JOINT = "tag_weapon"
 DEFAULT_LEFT_TARGET_JOINT = "tag_weapon_left"
 DEFAULT_RIGHT_TARGET_JOINT = "tag_weapon_right"
-PRODUCT_NAME = "Maya Viewmodel Weapon Toolkit"
-PRODUCT_SHORT_NAME = "Viewmodel Weapon Toolkit"
+PRODUCT_NAME = "CoD Viewmodel Toolkit"
+PRODUCT_SHORT_NAME = "CoD Viewmodel Toolkit"
 PLUGIN_BASENAME = "viewmodel_weapon_toolkit"
 LEGACY_PLUGIN_BASENAME = "attach_gun"
 DEFAULT_OUTPUT_DIR = os.path.join(
@@ -87,7 +87,7 @@ COMMAND_NAME = "viewmodelWeaponToolkit"
 LEGACY_COMMAND_NAME = "attachGun"
 WINDOW_NAME = "ViewmodelWeaponToolkitWindow"
 DUAL_WINDOW_NAME = "ViewmodelWeaponToolkitDualWindow"
-VERSION = "3.2.0"
+VERSION = "3.3.0"
 
 VIEWHANDS_OPTVAR = "attachGun_viewhandsPath"
 OUTPUT_DIR_OPTVAR = "attachGun_outputDir"
@@ -5690,7 +5690,7 @@ def _about_message():
         "- Duplicates the same weapon; does not merge two different weapon\n"
         "  skeletons.\n\n"
         "Source and releases:\n"
-        "https://github.com/ez4cywa/maya-viewmodel-weapon-toolkit"
+        "https://github.com/ez4cywa/cod-viewmodel-toolkit"
         % (PRODUCT_NAME, VERSION)
     )
 
@@ -5735,7 +5735,7 @@ def create_menu():
     cmds.menuItem(
         label="Auto-Safe Dropped CAST Animations",
         annotation=("Safely route pure animation CAST files dropped onto "
-                    "a Viewmodel Weapon Toolkit scene."),
+                    "a CoD Viewmodel Toolkit scene."),
         checkBox=auto_safe_drop_enabled(),
         command=lambda enabled, *_: set_auto_safe_drop_enabled(enabled),
     )
@@ -5754,7 +5754,7 @@ def create_menu():
             clear_saved_settings(),
             cmds.confirmDialog(
                 title=PRODUCT_SHORT_NAME,
-                message="Saved Viewmodel Weapon Toolkit settings cleared.",
+                message="Saved CoD Viewmodel Toolkit settings cleared.",
                 button=["OK"],
                 defaultButton="OK",
             ),

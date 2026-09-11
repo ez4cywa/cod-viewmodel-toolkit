@@ -1,29 +1,34 @@
-# Maya Viewmodel Weapon Toolkit
+# CoD Viewmodel Toolkit
 
 [简体中文](README.zh-CN.md)
 
-Maya Viewmodel Weapon Toolkit turns CAST viewhands, weapons, and animations
-into assembled first-person scenes and export batches. Build single-weapon
-or duplicated-weapon dual-wield setups, compose left/right animations, and
-export MA, CAST, SMD, or FBX with independent output folders and JSON reports.
+CoD Viewmodel Toolkit assembles **Call of Duty first-person viewhands,
+weapons and CAST animations** in Maya or Blender. Build a single weapon or
+duplicate one weapon for dual wield, compose left/right clips, and batch
+export with independent format folders and JSON reports. Compatibility
+depends on the supplied skeletons; this is not a promise of support for
+every Call of Duty title or extractor.
 
-Version **3.2.0** bundles the project-patched **CAST 2.00** translator and
-provides English and Simplified Chinese interfaces with resizable forms,
-grouped settings, descriptive control labels, and visible keyboard focus.
-It targets Maya 2022+ in Python 3 mode; runtime verification uses Maya 2025
-for Windows.
+Version **3.3.0** adds a Blender edition based on upstream **CAST 2.00**.
+Maya has English and Simplified Chinese packages; Blender currently has an
+English native sidebar. Both platforms bundle their own project-patched
+CAST backend. Blender does not require Maya.
 
-[Download 3.2.0](https://github.com/ez4cywa/maya-viewmodel-weapon-toolkit/releases/tag/3.2.0)
-· [What's new](docs/RELEASE_NOTES_3.2.0.md)
+[Download 3.3.0](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/tag/3.3.0)
+· [What's new](docs/RELEASE_NOTES_3.3.0.md)
+· [Blender guide](docs/BLENDER.md)
 
-## New in 3.2.0
+## Choose your platform
 
-- CAST 2.00 name normalization is shared by preflight and animation routing;
-  ambiguous joint names are rejected before import.
-- Scrollable single/dual forms keep primary actions visible, with a 10-point
-  minimum control font and automatic scrolling to focused fields.
-- Disabled output folders retain their values; empty queues explain how to
-  begin. Both language editions share the same implementation.
+| Edition | Verified runtime | Scene format | Package suffix |
+| --- | --- | --- | --- |
+| Maya English / 简体中文 | Maya 2025, Windows; targets Maya 2022+ Python 3 | `.ma` | `maya-en` / `maya-zh-CN` |
+| Blender English | Blender 5.2.1 LTS, Windows; requires Blender 5.2+ | `.blend` assembly scene | `blender-en` |
+
+Both support single/dual assembly, skeletal animation composition, one-side
+replacement, batch queues, CAST, FBX and SMD. Platform-specific import and
+scene-editing behavior is not identical. Follow the [Blender guide](docs/BLENDER.md)
+for installation, limitations and API examples. **The sections below describe Maya.**
 
 ## Features
 
@@ -82,7 +87,7 @@ baseline, hashes, and local changes.
    both the old `attach_gun.py` and the English primary entry instead.
 4. In Maya's Plug-in Manager, load `viewmodel_weapon_toolkit.py` for English,
    or `viewmodel_weapon_toolkit_zh_CN.py` for Simplified Chinese.
-5. Open the **Viewmodel Weapon Toolkit** menu in Maya's main menu bar.
+5. Open the **CoD Viewmodel Toolkit** menu in Maya's main menu bar.
 
 For a source checkout, copy `third_party/cast/cast.py` and
 `third_party/cast/castplugin.py` beside the selected toolkit entry files.
@@ -207,7 +212,7 @@ minimum-version statement is a compatibility assessment, not a claim that
 the complete asset regression suite was executed in Maya 2022.
 
 The old filename, command, option variables, and dual-scene metadata remain
-supported in 3.2.0. This allows scenes and preferences created by Attach Gun to
+supported in 3.3.0. This allows scenes and preferences created by Attach Gun to
 continue working after the product rename.
 
 ## Testing
@@ -229,7 +234,7 @@ Game assets are not included in the public repository.
 See [batch verification notes](docs/BATCH_ANIMATION_VERIFICATION.md) for coverage.
 See [3.2.0 verification](docs/VERIFICATION_3.2.0.md) for CAST 2.00 and native UI checks.
 
-Build both language archives with `python scripts/build_release.py <output-dir>`.
+Build all three platform/language archives with `python scripts/build_release.py <output-dir>`.
 
 ## License
 
