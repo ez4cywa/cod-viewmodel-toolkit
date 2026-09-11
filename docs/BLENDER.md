@@ -1,4 +1,11 @@
-# Blender — CoD Viewmodel Toolkit 3.3.0
+# Blender — CoD Viewmodel Toolkit 3.4.0
+
+The 3.4.0 release also offers `cod-viewmodel-toolkit-3.4.0-blender-zh-CN.zip`.
+It localizes the add-on UI without changing Blender's language. English and
+Chinese packages share the same module: stop batches and disable the old
+edition before installing and enabling the other. Do not load renamed copies
+of both editions together. Backend exceptions and JSON technical keys remain
+English. Both editions contain identical assembly/export logic.
 
 [简体中文](BLENDER.zh-CN.md) · [Project](../README.md)
 
@@ -8,7 +15,7 @@ remains independent. No game assets, Blender executable or Maya runtime are bund
 
 ## Install
 
-1. Download `cod-viewmodel-toolkit-3.3.0-blender-en.zip`.
+1. Download `cod-viewmodel-toolkit-3.4.0-blender-en.zip` (English) or `cod-viewmodel-toolkit-3.4.0-blender-zh-CN.zip` (Simplified Chinese).
 2. In Blender, open Edit > Preferences > Add-ons > menu > Install from Disk.
    Select the ZIP as a legacy add-on and enable **CoD Viewmodel Toolkit**.
 3. In the 3D Viewport press `N`, then select **Viewmodel**.

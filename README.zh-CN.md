@@ -9,7 +9,7 @@ CAST 动画**的组装与批量导出，提供 Maya 和 Blender 两个版本。�
 
 **3.4.0** 新增可选的[英尺转米输出](docs/OUTPUT_UNITS.md)。Blender 版本基于
 上游 **CAST 2.00**。Maya 提供英文和简体
-中文包；Blender 目前提供英文原生侧栏。两个平台分别内置项目补丁版 CAST，
+中文包；Blender 提供英文和简体中文原生侧栏。两个平台分别内置项目补丁版 CAST，
 Blender 版不依赖 Maya。
 
 [下载 3.4.0](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/tag/3.4.0)
@@ -21,7 +21,7 @@ Blender 版不依赖 Maya。
 | 版本 | 已验证环境 | 场景格式 | 发布包后缀 |
 | --- | --- | --- | --- |
 | Maya 英文／简体中文 | Windows Maya 2025；目标 Maya 2022+ Python 3 | `.ma` | `maya-en` / `maya-zh-CN` |
-| Blender 英文 | Windows Blender 5.2.1 LTS；要求 Blender 5.2+ | `.blend` 组装场景 | `blender-en` |
+| Blender 英文／简体中文 | Windows Blender 5.2.1 LTS；要求 Blender 5.2+ | `.blend` 组装场景 | `blender-en` / `blender-zh-CN` |
 
 两个平台均支持单／双持、骨骼动画合成、单侧替换、批量队列以及 CAST、FBX、
 SMD 导出。平台间的导入和场景编辑行为并非完全相同。Blender 安装、限制和

@@ -12,7 +12,7 @@ every Call of Duty title or extractor.
 Version **3.4.0** adds optional [ft-to-meter output conversion](docs/OUTPUT_UNITS.md).
 The Blender edition is based on upstream **CAST 2.00**.
 Maya has English and Simplified Chinese packages; Blender currently has an
-English native sidebar. Both platforms bundle their own project-patched
+English or Simplified Chinese native sidebar. Both platforms bundle their own project-patched
 CAST backend. Blender does not require Maya.
 
 [Download 3.4.0](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/tag/3.4.0)
@@ -24,7 +24,7 @@ CAST backend. Blender does not require Maya.
 | Edition | Verified runtime | Scene format | Package suffix |
 | --- | --- | --- | --- |
 | Maya English / 简体中文 | Maya 2025, Windows; targets Maya 2022+ Python 3 | `.ma` | `maya-en` / `maya-zh-CN` |
-| Blender English | Blender 5.2.1 LTS, Windows; requires Blender 5.2+ | `.blend` assembly scene | `blender-en` |
+| Blender English / 简体中文 | Blender 5.2.1 LTS, Windows; requires Blender 5.2+ | `.blend` assembly scene | `blender-en` / `blender-zh-CN` |
 
 Both support single/dual assembly, skeletal animation composition, one-side
 replacement, batch queues, CAST, FBX and SMD. Platform-specific import and

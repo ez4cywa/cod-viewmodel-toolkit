@@ -1,4 +1,4 @@
-"""Build Maya EN/ZH and Blender EN archives from explicit file lists."""
+"""Build Maya and Blender EN/ZH archives from explicit file lists."""
 
 import argparse
 from pathlib import Path
@@ -8,7 +8,7 @@ import zipfile
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def build(output):
+def build(output, blender_zh_only=False):
     source = (ROOT / "plug-ins/viewmodel_weapon_toolkit.py").read_text(
         encoding="utf-8")
     version = re.search(r'^VERSION = "([0-9.]+)"$', source, re.MULTILINE).group(1)
@@ -24,7 +24,7 @@ def build(output):
         "docs/BLENDER.md", "docs/BLENDER.zh-CN.md")}
     for name in ("cast.py", "castplugin.py"):
         common["plug-ins/" + name] = "third_party/cast/" + name
-    for edition in ("en", "zh-CN"):
+    for edition in (() if blender_zh_only else ("en", "zh-CN")):
         files = dict(common)
         entry = ("attach_gun.py" if edition == "en" else
                  "viewmodel_weapon_toolkit_zh_CN.py")
@@ -59,17 +59,24 @@ def build(output):
                  "docs/BATCH_ANIMATION_VERIFICATION.md", "docs/OUTPUT_UNITS.md", "docs/VERIFICATION_3.4.0.md",
                  "docs/RELEASE_NOTES_3.3.0.md", "docs/RELEASE_NOTES_3.4.0.md"):
         files[name] = name
-    archive = output / ("cod-viewmodel-toolkit-%s-blender-en.zip" % version)
-    with zipfile.ZipFile(str(archive), "x", zipfile.ZIP_DEFLATED) as bundle:
-        for target, original in sorted(files.items()):
-            info = zipfile.ZipInfo("cod_viewmodel_toolkit/" + target, (2026, 1, 1, 0, 0, 0))
-            info.compress_type = zipfile.ZIP_DEFLATED
-            info.external_attr = 0o644 << 16
-            bundle.writestr(info, (ROOT / original).read_bytes())
-    print(archive)
+    from blender_zh_cn import localize
+    for edition in (("zh-CN",) if blender_zh_only else ("en", "zh-CN")):
+        archive = output / ("cod-viewmodel-toolkit-%s-blender-%s.zip" % (version, edition))
+        with zipfile.ZipFile(str(archive), "x", zipfile.ZIP_DEFLATED) as bundle:
+            for target, original in sorted(files.items()):
+                info = zipfile.ZipInfo("cod_viewmodel_toolkit/" + target, (2026, 1, 1, 0, 0, 0))
+                info.compress_type = zipfile.ZIP_DEFLATED
+                info.external_attr = 0o644 << 16
+                data = (ROOT / original).read_bytes()
+                if edition == "zh-CN" and target in ("__init__.py", "ui.py"):
+                    data = localize(data.decode("utf-8"), target)
+                bundle.writestr(info, data)
+        print(archive)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("output", help="Directory for all three platform/language ZIPs")
-    build(parser.parse_args().output)
+    parser.add_argument("output", help="Directory for platform/language ZIPs")
+    parser.add_argument("--blender-zh-only", action="store_true", help="Build only the supplemental Blender Chinese package")
+    args = parser.parse_args()
+    build(args.output, args.blender_zh_only)

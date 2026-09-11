@@ -1,5 +1,10 @@
 # CoD Viewmodel Toolkit 3.4.0 — ft to meters
 
+**补充安装包 / Additional package:** `cod-viewmodel-toolkit-3.4.0-blender-zh-CN.zip`
+提供 Blender 简体中文界面，不改全局语言；与英文包二选一安装。底层异常和 JSON
+技术字段保留英文。The additional Simplified Chinese UI package shares the same
+backend and add-on identifier as the English edition; install one edition at a time.
+
 ## 中文
 
 Maya 和 Blender 新增可选的米制输出：在输出设置选择 **Meters (input: ft)**，
