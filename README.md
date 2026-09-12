@@ -9,14 +9,15 @@ export with independent format folders and JSON reports. Compatibility
 depends on the supplied skeletons; this is not a promise of support for
 every Call of Duty title or extractor.
 
-Version **3.4.0** adds optional [ft-to-meter output conversion](docs/OUTPUT_UNITS.md).
+Version **3.4.1** fixes Maya CAST animation drops failing with `NameError: __file__`.
+Optional [ft-to-meter output conversion](docs/OUTPUT_UNITS.md) remains available.
 The Blender edition is based on upstream **CAST 2.00**.
 Maya has English and Simplified Chinese packages; Blender currently has an
 English or Simplified Chinese native sidebar. Both platforms bundle their own project-patched
 CAST backend. Blender does not require Maya.
 
-[Download 3.4.0](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/tag/3.4.0)
-· [What's new](docs/RELEASE_NOTES_3.4.0.md)
+[Download 3.4.1](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/tag/3.4.1)
+· [What's new](docs/RELEASE_NOTES_3.4.1.md)
 · [Blender guide](docs/BLENDER.md)
 
 ## Choose your platform

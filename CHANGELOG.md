@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented here.
 
+## [3.4.1] - 2026-09-12
+
+- Fix Maya CAST animation drops failing with `NameError: __file__` in the
+  registered plugin. Resolve the units module from the recorded plugin path;
+  cover single and dual drops without importing a second core module in tests.
+- Blender functionality is unchanged; package versions are synchronized.
+
 ## [3.4.0] - 2026-09-11
 
 - Optional ft-to-meter output copies for Maya and Blender, with original behavior as the default.

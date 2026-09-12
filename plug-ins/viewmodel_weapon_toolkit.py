@@ -87,7 +87,7 @@ COMMAND_NAME = "viewmodelWeaponToolkit"
 LEGACY_COMMAND_NAME = "attachGun"
 WINDOW_NAME = "ViewmodelWeaponToolkitWindow"
 DUAL_WINDOW_NAME = "ViewmodelWeaponToolkitDualWindow"
-VERSION = "3.4.0"
+VERSION = "3.4.1"
 
 VIEWHANDS_OPTVAR = "attachGun_viewhandsPath"
 OUTPUT_DIR_OPTVAR = "attachGun_outputDir"
@@ -150,7 +150,12 @@ _OUTPUT_IN_METERS = False
 def _units_module():
     global _UNITS_MODULE
     if _UNITS_MODULE is None:
-        path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cod_viewmodel_units.py")
+        # Maya's plugin loader may omit __file__; initializePlugin records
+        # the actual registered path for all adjacent bundled modules.
+        directory = _toolkit_module_dir()
+        if not directory:
+            raise RuntimeError("Unable to locate the toolkit units module: plugin path is unavailable")
+        path = os.path.join(directory, "cod_viewmodel_units.py")
         spec = importlib.util.spec_from_file_location(__name__ + "_units", path)
         module = importlib.util.module_from_spec(spec)
         sys.modules[spec.name] = module

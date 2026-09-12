@@ -26,7 +26,7 @@ from cod_viewmodel_toolkit.backend import backend
 
 assert Path(cod_viewmodel_toolkit.__file__).resolve().is_relative_to(scripts)
 assert Path(backend().importer.__file__).parent.name == "vendor_cast"
-assert cod_viewmodel_toolkit.bl_info["version"] == (3, 4, 0)
+assert cod_viewmodel_toolkit.bl_info["version"] == (3, 4, 1)
 assert hasattr(bpy.types.Scene, "cod_vwt")
 if "zh-CN" in archive.name:
     from cod_viewmodel_toolkit import ui
