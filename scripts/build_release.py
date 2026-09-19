@@ -22,7 +22,7 @@ def build(output, blender_zh_only=False):
         "docs/VERIFICATION_3.2.0.md", "docs/RELEASE_NOTES_3.2.0.md",
         "docs/VERIFICATION_3.3.0.md", "docs/RELEASE_NOTES_3.3.0.md", "docs/RELEASE_NOTES_3.4.0.md",
         "docs/BLENDER.md", "docs/BLENDER.zh-CN.md", "docs/RELEASE_NOTES_3.4.1.md",
-        "docs/VERIFICATION_3.4.1.md")}
+        "docs/VERIFICATION_3.4.1.md", "docs/MAYA.md", "docs/MAYA.zh-CN.md")}
     for name in ("cast.py", "castplugin.py"):
         common["plug-ins/" + name] = "third_party/cast/" + name
     for edition in (() if blender_zh_only else ("en", "zh-CN")):
@@ -59,7 +59,8 @@ def build(output, blender_zh_only=False):
                  "docs/VERIFICATION_3.2.0.md", "docs/RELEASE_NOTES_3.2.0.md",
                  "docs/BATCH_ANIMATION_VERIFICATION.md", "docs/OUTPUT_UNITS.md", "docs/VERIFICATION_3.4.0.md",
                  "docs/RELEASE_NOTES_3.3.0.md", "docs/RELEASE_NOTES_3.4.0.md",
-                 "docs/RELEASE_NOTES_3.4.1.md", "docs/VERIFICATION_3.4.1.md"):
+                 "docs/RELEASE_NOTES_3.4.1.md", "docs/VERIFICATION_3.4.1.md",
+                 "docs/MAYA.md", "docs/MAYA.zh-CN.md"):
         files[name] = name
     from blender_zh_cn import localize
     for edition in (("zh-CN",) if blender_zh_only else ("en", "zh-CN")):

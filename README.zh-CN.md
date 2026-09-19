@@ -1,209 +1,160 @@
+<div align="center">
+
 # CoD Viewmodel Toolkit
 
-[English](README.md)
+**组装手臂与武器，合成动画，在 Maya 或 Blender 中批量导出。**
 
-CoD Viewmodel Toolkit 主要用于**使命召唤（Call of Duty）第一人称手臂、武器和
-CAST 动画**的组装与批量导出，提供 Maya 和 Blender 两个版本。支持单武器、
-同一武器复制双持、左右动画合成、独立格式输出目录和 JSON 验证报告。
-兼容性取决于具体骨骼和数据，不代表支持所有使命召唤作品或提取器。
+面向使命召唤第一人称 CAST 模型与骨骼动画的本地工具包。
 
-**3.4.1** 修复 Maya 拖入 CAST 动画时的 `NameError: __file__` 报错。
-保留可选的[英尺转米输出](docs/OUTPUT_UNITS.md)。Blender 版本基于
-上游 **CAST 2.00**。Maya 提供英文和简体
-中文包；Blender 提供英文和简体中文原生侧栏。两个平台分别内置项目补丁版 CAST，
-Blender 版不依赖 Maya。
+[![Release](https://img.shields.io/github/v/release/ez4cywa/cod-viewmodel-toolkit)](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/latest)
+[![Static checks](https://github.com/ez4cywa/cod-viewmodel-toolkit/actions/workflows/static-checks.yml/badge.svg)](https://github.com/ez4cywa/cod-viewmodel-toolkit/actions/workflows/static-checks.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-[下载 3.4.1](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/tag/3.4.1)
-· [更新说明](docs/RELEASE_NOTES_3.4.1.md)
-· [Blender 使用说明](docs/BLENDER.zh-CN.md)
+[**下载安装包**](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/latest) · [Maya 使用说明](docs/MAYA.zh-CN.md) · [Blender 使用说明](docs/BLENDER.zh-CN.md) · [更新记录](CHANGELOG.md) · [反馈问题](https://github.com/ez4cywa/cod-viewmodel-toolkit/issues/new/choose)
 
-## 选择平台
+简体中文 · [**English**](README.md)
 
-| 版本 | 已验证环境 | 场景格式 | 发布包后缀 |
-| --- | --- | --- | --- |
-| Maya 英文／简体中文 | Windows Maya 2025；目标 Maya 2022+ Python 3 | `.ma` | `maya-en` / `maya-zh-CN` |
-| Blender 英文／简体中文 | Windows Blender 5.2.1 LTS；要求 Blender 5.2+ | `.blend` 组装场景 | `blender-en` / `blender-zh-CN` |
+</div>
 
-两个平台均支持单／双持、骨骼动画合成、单侧替换、批量队列以及 CAST、FBX、
-SMD 导出。平台间的导入和场景编辑行为并非完全相同。Blender 安装、限制和
-操作流程见 [Blender 使用说明](docs/BLENDER.zh-CN.md)。**下文为 Maya 版说明。**
+## 可以做什么
 
-## 主要功能
-
-- 将武器文件中的 `j_gun` 挂到手臂文件的 `tag_weapon`。
-- 将同一武器复制两份，分别挂到 `tag_weapon_left` 和
-  `tag_weapon_right`。
-- 让左右双持动画在同一帧区间同时播放。
-- 提供顺序播放模式，便于前后对比两段完整动画。
-- 在已生成的双持场景中只替换左侧或右侧动画。
-- 可选用兼容手臂模型的静止姿态，补偿武器挂点的相对/叠加位移动画。
-- 即使 CAST 全局启用了 **Import Resets Scene**，工具包管理的动画导入也会
-  保留场景中的已有动画。
-- 安全处理重名关节，拖入纯动画 CAST 时不会错误驱动武器根骨。
-- 可独立选择是否输出 `.ma`、`.cast`、`.smd`、`.fbx`。
-- 每种格式可选择不同输出目录，并自动生成 JSON 验证清单。
-- 单武器支持多个动画排队导出；双持支持多个左右动画配对，提供进度、取消和逐项报告。
-- 工具包动画批量导出使用 DQS（双四元数）蒙皮。
-- 发布包内置基于上游 v2.00 的项目补丁版 CAST Maya 转换器，包含 Batch
-  模式、单次调用选项和缺失 UV 导出修复。
-- 发布包同时提供英文版和简体中文版；两个版本复用同一套核心逻辑。
-
-## 运行要求
-
-- Autodesk Maya 2022 或更高版本，并须使用 Python 3 模式。Maya 2022
-  自带的 Python 3.7.7 是最低支持的 Python 运行时。
-- Windows 是目前已验证的操作系统。**打开输出目录** 使用 Windows 专用的
-  `os.startfile`；核心 Maya 工作流尚未在 macOS 或 Linux 上完成认证。
-- Release 压缩包已包含基于
-  [dtzxporter/cast v2.00](https://github.com/dtzxporter/cast/releases/tag/v2.00)
-  的项目补丁版 Maya 转换器，从压缩包安装时无需另行下载 CAST。
-- 骨骼命名符合下文约定的 CAST 文件。
-
-内置转换器派生自独立的 MIT 开源项目，并非官方原版。其准确上游基线、文件
-哈希及本地修改见
-[`third_party/cast/PATCHES.md`](third_party/cast/PATCHES.md)。
-
-## 安装
-
-1. 备份目标 Maya 插件目录中已有的 `castplugin.py` 和 `cast.py`。不要复制
-   或覆盖 `cast.cfg`，其中保存了个人 CAST 设置。
-2. 选择一个 Release 版本，把其中 `plug-ins` 目录的全部文件复制到 Maya
-   的 `MAYA_PLUG_IN_PATH` 目录。两个版本均包含补丁版 CAST 2.00：
-   - 英文版：`viewmodel_weapon_toolkit.py`。
-   - 简体中文版：同时复制 `viewmodel_weapon_toolkit.py` 和
-     `viewmodel_weapon_toolkit_zh_CN.py`；前者是共享核心。
-3. 英文版从 Attach Gun 升级时可以同时复制 `plug-ins/attach_gun.py`。
-   如使用中文版，请在插件管理器中关闭旧 `attach_gun.py` 和英文主入口的
-   自动加载，只启用中文入口。
-4. 英文版在 Maya 插件管理器中加载 `viewmodel_weapon_toolkit.py`；简体
-   中文版加载 `viewmodel_weapon_toolkit_zh_CN.py`。
-5. 从 Maya 主菜单打开 **CoD Viewmodel Toolkit**（英文版）或
-   **CoD 视角模型工具包**（中文版）。
-
-如果使用源码仓库，请将 `third_party/cast/cast.py` 和
-`third_party/cast/castplugin.py` 与所选工具包入口文件放在同一插件目录。
-
-插件同时注册新命令 `viewmodelWeaponToolkit` 和兼容命令 `attachGun`。
-英文版、中文版和旧入口注册相同命令，因此只能为其中一个版本启用自动加载。
-
-## 骨骼约定
-
-### 单武器
-
-- `j_gun` 来自武器文件。
-- `tag_weapon` 来自手臂文件。
-- 插件先使用 `cmds.parent(..., absolute=True)` 挂接武器，再将 `j_gun`
-  的本地 XYZ 位移设为零。
-- 不会冻结关节变换。
-
-### 双持
-
-- `tag_weapon_left` 和 `tag_weapon_right` 来自手臂文件。
-- 同一个武器模型导入两次，分别使用持久化前缀 `akimbo_l_` 和
-  `akimbo_r_`。
-- 左动画驱动左手分支和左武器；右动画驱动右手分支和右武器。
-- 同时模式中，共享的躯干/根骨轨道默认采用右侧动画；顺序模式会将两段
-  完整动画放到连续的时间区间。
-
-双持功能只适用于同一武器骨架的两个副本，不支持两套不同或不对称的武器
-骨架。
-
-### 可选参考姿态补偿
-
-部分动画 CAST 的 `relative` 或 `additive` 位移轨道是针对另一套手臂静止姿态
-制作的。如果武器能够播放动画但始终偏离某只手，请在 **参考姿态（可选）**
-中选择与动画兼容的手臂模型。工具会计算当前与参考模型
-`tag_weapon_left/right` 的本地静止位移差，只平移受影响的相对/叠加动画曲线；
-绝对轨道、旋转、武器根骨和蒙皮绑定不会改变。
-
-留空时保持旧版行为。当前模型和参考模型中的目标挂点必须具有相同名称的
-父关节。补偿数值与参考文件路径会写入场景元数据和验证清单，替换单侧动画
-时也会自动复用。
-
-## 输出说明
-
-原有构建器保持原行为：`.ma` 保存场景与动画，`.cast`、`.smd`、`.fbx` 输出静态模型。
-新增的 **单武器动画批量导出** 和 **双持动画批量导出** 则为每个勾选的格式输出动画：
-
-| 格式 | 批量导出的内容 |
+| 场景 | 功能 |
 | --- | --- |
-| MA | 完整 Maya 场景、蒙皮与动画 |
-| CAST | 合并模型与烘焙后的骨骼动画 |
-| FBX | 蒙皮模型与烘焙动画 |
-| SMD | 仅骨骼动画，不含网格；片段起点记为第 0 帧 |
+| 将武器装到手臂上 | 将武器 `j_gun` 挂到手臂 `tag_weapon` 下，归零武器局部平移，不冻结关节。 |
+| 组装双持武器 | 同一武器复制两份，分别挂接左右挂点，支持同时或顺序播放两段动画。 |
+| 只换一侧动画 | 在已有双持组装中替换左侧或右侧片段，无需重建模型。 |
+| 处理静止姿态不同造成的偏移 | 指定兼容参考手臂，补偿武器挂点的相对／叠加位移动画。 |
+| 一次导出多个动画 | 单片段或左右配对加入队列，独立选择格式与目录，生成逐项 JSON 报告。 |
+| 输出米制资产 | 可按输入为英尺换算输出副本，保留源文件和当前工作组装。 |
 
-单武器和双持批量流程统一使用 **DQS（双四元数蒙皮）**。MA、FBX 保留 Maya
-蒙皮类型；CAST 写入 `quaternion` 标记，将装配后的原始静止模型与逐帧采样动画
-组合保存，避免将动画首帧误当成绑定姿态。导出采样不会替换工作场景中的原始
-动画曲线；本功能不修改本机或内置的 CAST 插件文件。
+两个平台分别内置项目补丁版 [CAST 2.00](https://github.com/dtzxporter/cast/releases/tag/v2.00) 后端，Blender 版不依赖 Maya。模型、动画和贴图由用户提供，安装包不包含游戏资产或宿主软件。
 
-SMD v1 不保存帧率、缩放或剪切。帧率写入 JSON 清单，目标软件需据此设置。
-如关节包含非单位缩放或剪切，该 SMD 输出会明确报错，但不影响其他勾选格式。
-SMD 位移采用厘米，旋转采用 XYZ 欧拉角、弧度单位。
-
-四种格式均可关闭，也可以分别指定输出目录。工具不会覆盖已有文件，而是
-自动追加 `_v001` 一类版本后缀。
-
-## 动画批量导出
-
-1. 从工具包菜单或对应构建器打开 **单武器动画批量导出** 或 **双持动画批量导出**。
-2. 选择一份手臂和一份武器模型。双持可选择同时/顺序模式，并沿用可选参考姿态补偿。
-3. 单武器使用 **添加多个动画**。双持选择左右路径后点击 **添加当前左右配对**；
-   也可使用 **批量添加动画配对**，按对应顺序分别多选相同数量的左右文件。
-   导出前检查队列中显示的每一对完整路径。
-4. 独立勾选 MA、CAST、SMD、FBX，至少一种。各自目录可选，留空使用清单/默认目录。
-5. 点击 **开始批量导出动画**。每项使用干净场景；**当前项结束后取消** 会在本项
-   完成后停止剩余队列。运行前如有未保存场景，会提示保存。
-
-每项采用其导入动画的帧区间和帧率；双持每对左右动画的帧率必须一致。
-输出名采用动画文件名（双持采用左动画名）和统一版本后缀。重复队列项自动去重，
-不同路径但同名的动画使用不同版本，不覆盖文件。单项或单格式失败会记录原因，
-随后继续处理。批次 JSON 报告汇总成功路径、失败原因与取消状态。
-
-Python 接口：`batch_export_animations(hands, weapon, animation_paths, options)` 和
-`batch_export_dual_animations(hands, weapon, [(left, right), ...], options)`，分别使用
-`AttachOptions` 和 `DualWieldOptions`。四种格式开关及目录字段沿用现有配置；
-接口返回批次汇总字典，不改变原有构建器的静态导出默认行为。
-
-## 已知源数据警告
-
-部分动画包含 `j_gripsafety` 轨道，但模型中不存在该关节。工具会报告并跳过
-该孤立轨道，其余动画仍可正常导入。
-
-## 兼容性
-
-| 支持级别 | 环境 | 状态 |
-| --- | --- | --- |
-| 预期最低版本 | Maya 2022、Python 3.7.7、补丁版 CAST 2.00 | 源码语法和所需 Maya API 兼容；尚未在 Maya 2022 中执行基于实际资产的完整回归。 |
-| 发布验证版本 | Maya 2025、Python 3.11.4、补丁版 CAST 2.00、Windows | 单武器、双持、中文界面和导出的发布验证目标。 |
-
-Windows 或 Linux 版 Maya 2022 也可以用 Python 2 模式启动；本工具包必须在
-Python 3 模式下运行。Maya 2021 及更早版本不受支持。最低版本结论来自代码
-语法与 API 兼容性判断，不代表已在 Maya 2022 中运行完整资产回归。
-
-3.3.0 保留旧文件名入口、`attachGun` 命令、OptionVar 和双持场景元数据，原有
-场景与 Maya 偏好可以继续使用。
-
-## 测试
-
-可使用 Maya Python 运行发布入口和中文本地化测试：
-
-```powershell
-python tests/verify_vendored_cast.py
-mayapy tests/verify_plugin_identity.py
-mayapy tests/verify_reference_pose_compensation.py
-mayapy tests/verify_batch_animation_export.py
-mayapy tests/verify_cast_v200.py
+```mermaid
+flowchart LR
+    H[手臂 CAST] --> A[单武器或双持组装]
+    W[武器 CAST] --> A
+    A --> C[应用或替换动画]
+    L[动画 CAST 文件] --> C
+    C --> E[选择输出格式与单位]
+    E --> N[MA 或 BLEND 场景]
+    E --> X[CAST / FBX / SMD]
+    E --> J[JSON 验证报告]
 ```
 
-批量回归会自动生成合成 CAST 样本，检查双持两种播放模式、四种输出及 FBX
-重新导入后的逐帧结果。公开仓库不包含游戏资产。
-具体覆盖范围见[批量导出验证记录](docs/BATCH_ANIMATION_VERIFICATION.md)。
-CAST 2.00 与原生界面检查见 [3.2.0 验证记录](docs/VERIFICATION_3.2.0.md)。
+## 下载与安装
 
-使用 `python scripts/build_release.py <output-dir>` 构建三个平台／语言安装包。
+当前版本 **3.4.1**：修复 Maya 拖入动画时的 `NameError: __file__`；Blender 功能与 3.4.0 一致。详见[更新说明](docs/RELEASE_NOTES_3.4.1.md)。
 
-## 许可证
+| 平台 | 简体中文 ZIP | English ZIP | 运行环境 |
+| --- | --- | --- | --- |
+| Maya | [下载](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/download/3.4.1/cod-viewmodel-toolkit-3.4.1-maya-zh-CN.zip) | [Download](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/download/3.4.1/cod-viewmodel-toolkit-3.4.1-maya-en.zip) | 已验证 Windows Maya 2025；目标支持 Maya 2022+ 的 Python 3 模式。 |
+| Blender | [下载](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/download/3.4.1/cod-viewmodel-toolkit-3.4.1-blender-zh-CN.zip) | [Download](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/download/3.4.1/cod-viewmodel-toolkit-3.4.1-blender-en.zip) | 要求 Blender 5.2+；已验证 Windows Blender 5.2.1 LTS。 |
 
-本项目使用 MIT License。详见 [LICENSE](LICENSE) 和
-[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+请选择对应**平台和语言的 ZIP**，不要将 GitHub 自动生成的“Source code”源码包当作安装包。Release 同时提供 [SHA-256 校验文件](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/download/3.4.1/SHA256SUMS.txt)。正常使用由宿主自带 Python 运行，无需另装 Python。
+
+### Maya
+
+1. 升级前保存工作并关闭 Maya。备份原插件文件，保留个人 `cast.cfg`，不要覆盖。
+2. 解压 ZIP，把 `plug-ins` 中的**全部文件**复制到 `MAYA_PLUG_IN_PATH` 包含的目录。`cod_viewmodel_units.py`、`cast.py`、`castplugin.py` 必须与核心文件放在一起。
+3. 打开 Maya 插件管理器。中文版加载 `viewmodel_weapon_toolkit_zh_CN.py`，英文版加载 `viewmodel_weapon_toolkit.py`；只启用一个语言入口。
+4. 从主菜单打开 **CoD 视角模型工具包**／**CoD Viewmodel Toolkit**。
+
+从 Attach Gun 升级时，旧 `attach_gun.py` 入口和 `attachGun` 命令仍兼容；切换入口前请看[安装与兼容说明](docs/MAYA.zh-CN.md#安装)。
+
+### Blender
+
+1. 在 **Edit → Preferences → Add-ons → Install from Disk** 中直接选择 Blender ZIP。
+2. 启用 **CoD Viewmodel Toolkit**，在 3D 视图按 `N`，打开 **Viewmodel** 标签。
+3. 切换中英文版前先禁用旧版，再安装另一语言包。两者使用同一模块名，不修改 Blender 全局语言。
+
+组装选择、场景行为和 Python 接口详见 [Blender 使用说明](docs/BLENDER.zh-CN.md)。
+
+## 快速上手
+
+准备只含模型的手臂、武器 CAST；需要动画时，再准备只含动画的 CAST。贴图文件应保留在引用路径中。
+
+| 目标 | Maya | Blender |
+| --- | --- | --- |
+| 第一次组装 | 打开单武器构建器，选择手臂和武器，检查输入，选择输出并组装。 | 选择 **Single Weapon**，填写模型路径，执行 **Check Inputs** 和 **Build Assembly**。 |
+| 导入单武器动画 | 使用 **Import Animation Safely...**，或向有效工具包组装中拖入纯动画 CAST。 | 选中工具包骨架，在面板中应用所选片段。 |
+| 组装双持 | 打开双持构建器，选择一份武器及左右动画，设定同时或顺序模式。 | 选择 **Dual Wield**，填写左右动画并选择播放模式。 |
+| 替换双持片段 | 在双持窗口使用 **Replace Left Clip... / Replace Right Clip...**。 | 选中工具包骨架，使用 **Replace Left / Replace Right**。 |
+| 批量导出 | 使用 **Single Animation Batch... / Dual Animation Batch...**。 | 在 **Animation Batch** 中使用 **Start Batch Export**。 |
+
+表内保留英文控件名，中文版对应“检查输入”“组装模型”“替换左／右动画”等操作。Maya 批量任务从独立场景开始，提示保存时先保存当前工作。Blender 创建专用组装集合，只导出所选组装，不带出无关对象。Blender 动画通过工具包面板导入，不能把 Maya 的外部文件安全拖放能力视为两端共有功能。
+
+## 输出格式与蒙皮
+
+下表针对**带动画导出**。Maya 原有构建器默认保存场景并输出静态 CAST／FBX／SMD；需要带动画的交换文件时，请使用动画批量导出。Blender 则根据选中组装是否有动画决定导出内容。
+
+| 格式 | 内容 | DQS 保留情况 |
+| --- | --- | --- |
+| MA／BLEND | 带蒙皮、动画的原生场景或独立组装 | 保留原生 DQS／Preserve Volume 设置。 |
+| CAST | 合并模型与烘焙后的骨骼动画 | 写入 `quaternion` 蒙皮标记，接收端导入器需支持。 |
+| FBX | 蒙皮模型与烘焙动画 | Maya 动画导出保留 DQS；Blender FBX 不强制接收端使用 DQS，需在目标软件开启 **Dual Quaternion／Preserve Volume**。 |
+| SMD | 带动画时只输出骨架与动画，不含网格 | 不保存 DQS、骨骼缩放或帧率，由接收软件配置。 |
+| JSON | 输入、验证结果、输出路径、警告和批次结果 | 验证报告，不是模型或动画格式。 |
+
+Maya 动画流程明确设置 DQS，纯静态 Maya 导出不强制转换。已有输出不会覆盖：Maya 自动使用 `_v001` 等版本后缀，Blender 使用 `_001`；每种启用格式可指定独立目录。
+
+**单位：**默认“保持原单位”。选择“米（输入：英尺）”时，以 `1 ft = 0.3048 m` 换算输出副本，不会自动识别任意 CAST 的单位。Maya FBX 的存储元数据可能仍标为厘米，但实际换算尺寸正确；再次缩放前请看[输出单位说明](docs/OUTPUT_UNITS.md)。
+
+## 骨骼约定与功能范围
+
+- 单武器：武器 `j_gun` 挂到手臂 `tag_weapon` 下。归零的是**武器根骨骼**，不是手臂挂点本身的偏移。
+- 双持：手臂需要 `tag_weapon_left/right`。工具复制**同一武器骨架**，不合并两套无关的武器骨架。
+- 同时模式中，共享躯干／根骨轨道采用右侧片段；顺序模式将片段放到连续区间。左右片段帧率必须一致。
+- 参考姿态补偿需要兼容的挂点父骨骼，只处理相对／叠加位移，不是通用动画重定向。
+- 兼容性取决于骨骼命名和源数据，不保证支持所有使命召唤作品或提取器。
+- Blender 流程合成骨骼动画，跳过形态键动画；CAST IK、约束与毛发在该流程中关闭，贴图仍为外部引用。
+
+完整规则见 [Maya 使用说明](docs/MAYA.zh-CN.md)和 [Blender 使用说明](docs/BLENDER.zh-CN.md)。
+
+## 常见问题
+
+**为什么 `tag_weapon` 平移不为零？** 它定义手臂挂点相对父骨骼的位置。应检查其下武器 `j_gun` 的局部 XYZ 是否为零，不应只为清空数值而归零挂点。
+
+**Maya 拖入动画报 `NameError: __file__`。** 更新完整插件文件到 3.4.1 或更高版本后重启 Maya。3.4.1 已修复注册插件环境下的路径定位错误；其他报错请提供脚本编辑器中的完整堆栈。
+
+**双持场景通过普通单武器导入菜单报错。** 请使用双持窗口的左／右动画替换入口。普通单武器入口的挂接检查不等同于双持入口。
+
+**武器能动，但一直偏离一只手。** 检查动画是否基于另一套手臂静止姿态制作。兼容参考模型可以补偿挂点位移，直接归零骨骼不能替代这项检查。
+
+**FBX 导入后变形不同。** 先检查接收软件中的 DQS／Preserve Volume，尤其是 Blender 导出的 FBX。在 Blender 逐帧对比时将动画偏移设为 `0`，并核对单位和帧率。
+
+**提示部分动画轨道找不到骨骼。** `j_gripsafety` 等额外轨道可能被跳过并产生警告。不代表整段动画导入失败，应结合其余关键帧和结果报告判断。
+
+## 构建与验证
+
+以下面向开发者，普通安装使用上方 ZIP。在仓库根目录运行：
+
+```powershell
+git clone https://github.com/ez4cywa/cod-viewmodel-toolkit.git
+cd cod-viewmodel-toolkit
+python tests/verify_vendored_cast.py
+python tests/verify_vendored_blender_cast.py
+mayapy tests/verify_plugin_identity.py
+mayapy tests/verify_maya_drop_module_path.py
+python scripts/build_release.py ../release-output
+```
+
+`mayapy` 是 Maya 自带的 Python，可用完整路径调用。构建命令生成**四个**平台／语言 ZIP，不覆盖已有压缩包。源码安装方法见 [Maya](docs/MAYA.zh-CN.md#安装)和 [Blender](docs/BLENDER.zh-CN.md) 使用说明。
+
+GitHub Actions 只运行语法、内置后端完整性及生成资产检查，**不运行 Maya 或 Blender**。宿主验证单独记录：[3.4.1 导入修复](docs/VERIFICATION_3.4.1.md)、[米制输出](docs/VERIFICATION_3.4.0.md)、[Maya／Blender](docs/VERIFICATION_3.3.0.md)、[动画批量导出](docs/BATCH_ANIMATION_VERIFICATION.md)。Maya 2022 的兼容性来自 Python 3.7 语法与 API 检查，不代表已在该版本执行完整回归。
+
+## 项目结构
+
+```text
+plug-ins/                         Maya 核心、语言入口与单位处理
+blender/cod_viewmodel_toolkit/     Blender 组装、动画、导出与界面
+third_party/                      固定版本 CAST 后端、许可证与补丁
+scripts/                          发布打包与 Blender 中文本地化
+tests/                            宿主检查与合成样本回归
+docs/                             平台使用说明与验证记录
+```
+
+## 参与与许可证
+
+欢迎提交 [Issue](https://github.com/ez4cywa/cod-viewmodel-toolkit/issues/new/choose) 或 Pull Request。反馈时请附工具版本、宿主版本、操作流程、完整报错与预期结果，优先使用合成或可公开分享的复现文件；公开仓库不分发游戏资产。开发规范见 [CONTRIBUTING.md](CONTRIBUTING.md)，安全问题见 [SECURITY.md](SECURITY.md)。
+
+本工具包使用 [MIT License](LICENSE)。感谢 [dtzxporter/cast](https://github.com/dtzxporter/cast) 提供上游格式和转换器。内置后端包含项目补丁，并非未经修改的上游发行版：[Maya 补丁](third_party/cast/PATCHES.md)、[Blender 补丁](third_party/cast_blender/PATCHES.md)、[第三方声明](THIRD_PARTY_NOTICES.md)。
