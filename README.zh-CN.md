@@ -43,14 +43,14 @@ flowchart LR
 
 ## 下载与安装
 
-当前版本 **3.4.1**：修复 Maya 拖入动画时的 `NameError: __file__`；Blender 功能与 3.4.0 一致。详见[更新说明](docs/RELEASE_NOTES_3.4.1.md)。
+当前版本 **3.4.2**：批量写入蒙皮权重，加快 Maya 挂载；取消挂载成功弹窗，保留错误提示。Blender 功能不变。详见[更新说明](docs/RELEASE_NOTES_3.4.2.md)。
 
 | 平台 | 简体中文 ZIP | English ZIP | 运行环境 |
 | --- | --- | --- | --- |
-| Maya | [下载](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/download/3.4.1/cod-viewmodel-toolkit-3.4.1-maya-zh-CN.zip) | [Download](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/download/3.4.1/cod-viewmodel-toolkit-3.4.1-maya-en.zip) | 已验证 Windows Maya 2025；目标支持 Maya 2022+ 的 Python 3 模式。 |
-| Blender | [下载](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/download/3.4.1/cod-viewmodel-toolkit-3.4.1-blender-zh-CN.zip) | [Download](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/download/3.4.1/cod-viewmodel-toolkit-3.4.1-blender-en.zip) | 要求 Blender 5.2+；已验证 Windows Blender 5.2.1 LTS。 |
+| Maya | [下载](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/download/3.4.2/cod-viewmodel-toolkit-3.4.2-maya-zh-CN.zip) | [Download](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/download/3.4.2/cod-viewmodel-toolkit-3.4.2-maya-en.zip) | 3.4.2 已验证 Windows Maya 2027；旧版已验证 Maya 2025；目标支持 Maya 2022+ 的 Python 3 模式。 |
+| Blender | [下载](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/download/3.4.2/cod-viewmodel-toolkit-3.4.2-blender-zh-CN.zip) | [Download](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/download/3.4.2/cod-viewmodel-toolkit-3.4.2-blender-en.zip) | 要求 Blender 5.2+；已验证 Windows Blender 5.2.1 LTS。 |
 
-请选择对应**平台和语言的 ZIP**，不要将 GitHub 自动生成的“Source code”源码包当作安装包。Release 同时提供 [SHA-256 校验文件](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/download/3.4.1/SHA256SUMS.txt)。正常使用由宿主自带 Python 运行，无需另装 Python。
+请选择对应**平台和语言的 ZIP**，不要将 GitHub 自动生成的“Source code”源码包当作安装包。Release 同时提供 [SHA-256 校验文件](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/download/3.4.2/SHA256SUMS.txt)。正常使用由宿主自带 Python 运行，无需另装 Python。
 
 ### Maya
 

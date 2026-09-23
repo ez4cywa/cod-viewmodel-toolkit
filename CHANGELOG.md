@@ -2,6 +2,16 @@
 
 All notable changes to this project are documented here.
 
+## [3.4.2] - 2026-09-23
+
+- Speed up Maya model attachment by writing CAST skin weights in bounded API
+  blocks instead of one command per vertex. Preserve influence mapping, duplicate
+  influence accumulation, non-normalized weights and rigid-mesh behavior.
+- Remove completion dialogs from single, quick, dual and batch attachment.
+  Keep error dialogs, partial export failures, and unsaved-scene confirmation.
+- Verify Maya 2027 loading, attachment, weights and animation regression paths.
+- Blender behavior is unchanged; release versions remain synchronized.
+
 ## [3.4.1] - 2026-09-12
 
 - Fix Maya CAST animation drops failing with `NameError: __file__` in the

@@ -20,7 +20,7 @@ while retaining this license and patch record under `third_party/cast`.
 The bundled `cast.py` is byte-for-byte identical to the upstream v2.00
 release. The bundled `castplugin.py` is a project-maintained patch with
 SHA-256
-`27f503383f92d55420f40d91789c3843d0f3efdded1fd681e2054a56bf451712`.
+`5e28184d2fc4a24613ceeacc37006b3baaea82c4798ee0a97348f909f232fa00`.
 
 ## Local changes to `castplugin.py`
 
@@ -37,6 +37,10 @@ SHA-256
    v2.00's regular expression still allowed hyphens, which Maya renames again
    and could leave animation tracks without a matching node.
 7. Apply the same name normalization to curve-mode override targets.
+8. Import skin weights through bounded `MFnSkinCluster.setWeights` blocks
+   instead of per-vertex commands. Resolve physical indices from Maya's actual
+   influence order, accumulate duplicate slots, disable normalization, and keep
+   upstream's rigid-mesh weight of 1.0. Do not change scene evaluation/undo modes.
 
 The toolkit also mirrors the active translator's normalization in its model
 and animation inventories, rejects ambiguous normalization collisions before

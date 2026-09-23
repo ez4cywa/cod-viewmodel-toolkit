@@ -3,7 +3,7 @@
 bl_info = {
     "name": "CoD Viewmodel Toolkit",
     "author": "ez4cywa",
-    "version": (3, 4, 1),
+    "version": (3, 4, 2),
     "blender": (5, 2, 0),
     "location": "3D View > Sidebar > Viewmodel",
     "description": "CAST single/dual weapon assembly and animation batch exports",

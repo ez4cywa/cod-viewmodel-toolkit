@@ -43,14 +43,14 @@ flowchart LR
 
 ## Download and install
 
-Current release: **3.4.1**. It fixes Maya animation drops failing with `NameError: __file__`; Blender functionality is unchanged from 3.4.0. [Release notes](docs/RELEASE_NOTES_3.4.1.md).
+Current release: **3.4.2**. Faster Maya attachment through bulk skin-weight import; successful attachment no longer opens a modal dialog. Errors remain visible. Blender behavior is unchanged. [Release notes](docs/RELEASE_NOTES_3.4.2.md).
 
 | Host | English ZIP | 简体中文 ZIP | Runtime |
 | --- | --- | --- | --- |
-| Maya | [Download](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/download/3.4.1/cod-viewmodel-toolkit-3.4.1-maya-en.zip) | [下载](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/download/3.4.1/cod-viewmodel-toolkit-3.4.1-maya-zh-CN.zip) | Maya 2025 / Windows verified; targets Maya 2022+ in Python 3 mode. |
-| Blender | [Download](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/download/3.4.1/cod-viewmodel-toolkit-3.4.1-blender-en.zip) | [下载](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/download/3.4.1/cod-viewmodel-toolkit-3.4.1-blender-zh-CN.zip) | Requires Blender 5.2+; Blender 5.2.1 LTS / Windows verified. |
+| Maya | [Download](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/download/3.4.2/cod-viewmodel-toolkit-3.4.2-maya-en.zip) | [下载](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/download/3.4.2/cod-viewmodel-toolkit-3.4.2-maya-zh-CN.zip) | Maya 2027 / Windows verified in 3.4.2; Maya 2025 verified in prior releases; targets Maya 2022+ in Python 3 mode. |
+| Blender | [Download](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/download/3.4.2/cod-viewmodel-toolkit-3.4.2-blender-en.zip) | [下载](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/download/3.4.2/cod-viewmodel-toolkit-3.4.2-blender-zh-CN.zip) | Requires Blender 5.2+; Blender 5.2.1 LTS / Windows verified. |
 
-Download a **platform/language ZIP**, not GitHub's automatically generated “Source code” archive. [SHA-256 checksums](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/download/3.4.1/SHA256SUMS.txt) are included in the release. Python runs inside the selected host; no separate Python installation is needed for normal use.
+Download a **platform/language ZIP**, not GitHub's automatically generated “Source code” archive. [SHA-256 checksums](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/download/3.4.2/SHA256SUMS.txt) are included in the release. Python runs inside the selected host; no separate Python installation is needed for normal use.
 
 ### Maya
 

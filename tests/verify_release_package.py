@@ -14,7 +14,7 @@ if not hasattr(cmds, "pluginInfo"):
 
 CAST_HASHES = {
     "cast.py": "d1ff7fcb2a184f208b21be34485d1863834ae33811078a28a2ccf6ff61f2c577",
-    "castplugin.py": "27f503383f92d55420f40d91789c3843d0f3efdded1fd681e2054a56bf451712",
+    "castplugin.py": "5e28184d2fc4a24613ceeacc37006b3baaea82c4798ee0a97348f909f232fa00",
 }
 
 
@@ -50,7 +50,7 @@ def main(package, edition):
                           if edition == "zh-CN" else "viewmodel_weapon_toolkit.py")
     plugin_name = entry.stem
     cmds.loadPlugin(str(entry), quiet=True)
-    assert str(cmds.pluginInfo(plugin_name, query=True, version=True)) == "3.4.1"
+    assert str(cmds.pluginInfo(plugin_name, query=True, version=True)) == "3.4.2"
     assert hasattr(cmds, "viewmodelWeaponToolkit") and hasattr(cmds, "attachGun")
     # In Maya Batch the toolkit owns the fallback translator registration;
     # castplugin.py is loaded as the adjacent implementation module.

@@ -797,6 +797,47 @@ def utilityCreateSkinCluster(newMesh, bones=[], maxWeightInfluence=1, skinningMe
     return cluster
 
 
+def utilitySetSkinWeights(cluster, paths, weightedBones, vertexCount,
+                          maximumInfluence, boneBuffer, valueBuffer):
+    """Write bounded weight blocks, using Maya's actual physical influence order."""
+    import maya.api.OpenMaya as om
+    import maya.api.OpenMayaAnim as oma
+
+    selection = om.MSelectionList()
+    selection.add(cluster.name())
+    skin = oma.MFnSkinCluster(selection.getDependNode(0))
+    influences = skin.influenceObjects()
+    physical = {path.fullPathName(): i for i, path in enumerate(influences)}
+    remap = {}
+    pathIndices = {path: i for i, path in enumerate(paths)}
+    for bone in weightedBones:
+        selection = om.MSelectionList()
+        selection.add(bone)
+        remap[pathIndices[bone]] = physical[selection.getDagPath(0).fullPathName()]
+    count = len(influences)
+    indices = om.MIntArray(range(count))
+    shape = skin.getPathAtIndex(0)
+    # Bound dense working memory for large meshes/skeletons (~2 MiB of doubles).
+    blockSize = max(1, 262144 // count)
+    for start in range(0, vertexCount, blockSize):
+        end = min(vertexCount, start + blockSize)
+        component = om.MFnSingleIndexedComponent()
+        vertices = component.create(om.MFn.kMeshVertComponent)
+        component.addElements(range(start, end))
+        if count == 1:
+            # Preserve the upstream rigid-mesh rule, including zero source weights.
+            values = om.MDoubleArray([1.0])
+        else:
+            block = [0.0] * ((end - start) * count)
+            for vertex in range(start, end):
+                offset = (vertex - start) * count
+                for slot in range(maximumInfluence):
+                    source = vertex * maximumInfluence + slot
+                    block[offset + remap[boneBuffer[source]]] += valueBuffer[source]
+            values = om.MDoubleArray(block)
+        skin.setWeights(shape, vertices, indices, values, False)
+
+
 def utilityGetRootTransform(path):
     while True:
         parent = cmds.listRelatives(path, parent=True, fullPath=True)
@@ -2011,38 +2052,16 @@ def importModelNode(model, path):
             weightBoneBuffer = mesh.VertexWeightBoneBuffer()
             weightValueBuffer = mesh.VertexWeightValueBuffer()
             weightedBones = list({paths[x] for x in weightBoneBuffer})
-            weightedBonesCount = len(weightedBones)
 
             skinCluster = utilityCreateSkinCluster(newMesh,
                                                    weightedBones,
                                                    maximumInfluence,
                                                    skinningMethod)
 
-            weightedRemap = {paths.index(
-                x): i for i, x in enumerate(weightedBones)}
-
-            clusterAttrBase = skinCluster.name() + ".weightList[%d]"
-            clusterAttrArray = (".weights[0:%d]" % (weightedBonesCount - 1))
-
-            weightedValueBuffer = [0.0] * (weightedBonesCount)
-
-            for i in xrange(vertexCount):
-                if weightedBonesCount == 1:
-                    clusterAttrPayload = clusterAttrBase % i + ".weights[0]"
-                    weightedValueBuffer[0] = 1.0
-                else:
-                    clusterAttrPayload = clusterAttrBase % i + clusterAttrArray
-
-                    for j in xrange(maximumInfluence):
-                        weightIndex = j + (i * maximumInfluence)
-                        weightBone = weightBoneBuffer[weightIndex]
-                        weightValue = weightValueBuffer[weightIndex]
-
-                        weightedValueBuffer[weightedRemap[weightBone]
-                                            ] += weightValue
-
-                cmds.setAttr(clusterAttrPayload, *weightedValueBuffer)
-                weightedValueBuffer = [0.0] * (weightedBonesCount)
+            if skinCluster is None:
+                raise RuntimeError("Unable to create skinCluster for %s" % newMesh.fullPathName())
+            utilitySetSkinWeights(skinCluster, paths, weightedBones, vertexCount,
+                                  maximumInfluence, weightBoneBuffer, weightValueBuffer)
 
         utilityStepProgress(progress,
                             "Importing mesh [%d] of [%d]..." % (m + 1, len(meshes)))

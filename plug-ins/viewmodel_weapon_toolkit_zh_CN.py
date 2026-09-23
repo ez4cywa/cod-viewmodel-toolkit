@@ -1,4 +1,4 @@
-"""Simplified Chinese entry point for CoD Viewmodel Toolkit 3.4.1.
+"""Simplified Chinese entry point for CoD Viewmodel Toolkit 3.4.2.
 
 This file reuses the English implementation beside it and localizes Maya UI
 text at the command boundary. Technical identifiers, joint names, file
@@ -17,7 +17,7 @@ import sys
 import maya.cmds as _maya_cmds
 
 
-VERSION = "3.4.1"
+VERSION = "3.4.2"
 _LOADER_FILE = globals().get("__file__") or sys._getframe().f_code.co_filename
 _CORE_PATH = os.path.join(
     os.path.dirname(os.path.abspath(_LOADER_FILE)),
@@ -317,6 +317,10 @@ def translate_ui_text(value):
     """Translate one user-facing UI value while preserving data values."""
     if not isinstance(value, str):
         return value
+    if value.startswith("Attachment complete. Manifest: "):
+        return "挂载完成。清单：" + value[len("Attachment complete. Manifest: "):]
+    if value.startswith("Some animation outputs failed: "):
+        return "部分动画输出失败：" + value[len("Some animation outputs failed: "):]
     translated = _EXACT_TRANSLATIONS.get(value)
     if translated is not None:
         return translated

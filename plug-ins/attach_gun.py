@@ -1,4 +1,4 @@
-"""Legacy loader for CoD Viewmodel Toolkit 3.4.1.
+"""Legacy loader for CoD Viewmodel Toolkit 3.4.2.
 
 Existing Maya installations may continue to auto-load ``attach_gun.py``.
 New installations should load ``viewmodel_weapon_toolkit.py`` instead.

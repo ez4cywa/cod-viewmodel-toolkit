@@ -87,7 +87,7 @@ COMMAND_NAME = "viewmodelWeaponToolkit"
 LEGACY_COMMAND_NAME = "attachGun"
 WINDOW_NAME = "ViewmodelWeaponToolkitWindow"
 DUAL_WINDOW_NAME = "ViewmodelWeaponToolkitDualWindow"
-VERSION = "3.4.1"
+VERSION = "3.4.2"
 
 VIEWHANDS_OPTVAR = "attachGun_viewhandsPath"
 OUTPUT_DIR_OPTVAR = "attachGun_outputDir"
@@ -4961,6 +4961,16 @@ def _preflight_from_dialog():
         _show_error("%s - Preflight" % PRODUCT_SHORT_NAME, exc)
 
 
+def _attachment_finished(result):
+    """Keep completion non-modal, but never hide partial export failures."""
+    if result.output_errors:
+        raise RuntimeError("Some animation outputs failed: %s" % result.output_errors)
+    message = "Attachment complete. Manifest: %s" % result.output_manifest
+    log(message)
+    if cmds.control(_UI_FEEDBACK_CONTROL, exists=True):
+        cmds.text(_UI_FEEDBACK_CONTROL, edit=True, label=message)
+
+
 def _run_from_dialog():
     try:
         viewhands, weapon = _require_dialog_paths(require_weapon=True)
@@ -4970,26 +4980,7 @@ def _run_from_dialog():
         if not _confirm_scene_reset():
             return
         result = attach_gun(viewhands, weapon, options)
-        cmds.confirmDialog(
-            title="%s - Done" % PRODUCT_SHORT_NAME,
-            message=("Done. weapon:%s -> viewhands:%s\n"
-                     "Translation: %s\n\n"
-                     "MA: %s\nCast: %s\nSMD: %s\nFBX: %s\n"
-                     "Manifest: %s\n\n"
-                     "Use Dual-Wield Builder for an Akimbo result."
-                     % (
-                         options.source_joint,
-                         options.target_joint,
-                         result.translation,
-                         result.output_scene or "disabled",
-                         result.output_cast or "disabled",
-                         result.output_smd or "disabled",
-                         result.output_fbx or "disabled",
-                         result.output_manifest,
-                     )),
-            button=["OK"],
-            defaultButton="OK",
-        )
+        _attachment_finished(result)
     except Exception as exc:
         _show_error("%s - Error" % PRODUCT_SHORT_NAME, exc)
 
@@ -5038,11 +5029,13 @@ def _batch_from_dialog():
                         index, len(weapon_paths), os.path.basename(weapon_path)),
                 )
                 try:
-                    successes.append(attach_gun(
+                    attached = attach_gun(
                         viewhands,
                         weapon_path,
                         replace(options, force_new_scene=True),
-                    ))
+                    )
+                    _attachment_finished(attached)
+                    successes.append(attached)
                 except Exception as exc:
                     errors.append((weapon_path, str(exc)))
                     log("BATCH ERROR %s: %s" % (weapon_path, exc))
@@ -5058,12 +5051,9 @@ def _batch_from_dialog():
             "Batch complete. One output set was produced per weapon.\n"
             "Succeeded: %d\nFailed: %d\nCancelled: %s\n\n%s"
             % (len(successes), len(errors), cancelled, error_text))
-        cmds.confirmDialog(
-            title="%s - Batch Result" % PRODUCT_SHORT_NAME,
-            message=message,
-            button=["OK"],
-            defaultButton="OK",
-        )
+        log(message)
+        if errors:
+            _show_error("%s - Batch Error" % PRODUCT_SHORT_NAME, message)
     except Exception as exc:
         _show_error("%s - Batch Error" % PRODUCT_SHORT_NAME, exc)
 
@@ -5096,16 +5086,7 @@ def quick_attach():
         if not _confirm_scene_reset():
             return
         attached = attach_gun(viewhands, result[0], options)
-        formats = [key for key, enabled in attached.requested_outputs.items()
-                   if enabled]
-        cmds.confirmDialog(
-            title="%s - Done" % PRODUCT_SHORT_NAME,
-            message=("Saved formats: %s\nManifest:\n%s"
-                     % (", ".join("." + value for value in formats),
-                        attached.output_manifest)),
-            button=["OK"],
-            defaultButton="OK",
-        )
+        _attachment_finished(attached)
     except Exception as exc:
         _show_error("%s - Quick Attach" % PRODUCT_SHORT_NAME, exc)
 
@@ -5325,33 +5306,7 @@ def _run_dual_from_dialog():
         if not _confirm_scene_reset():
             return
         result = attach_dual_wield(*paths, options=options)
-        cmds.confirmDialog(
-            title="%s - Dual-Wield Done" % PRODUCT_SHORT_NAME,
-            message=(
-                "Dual-wield scene built.\n"
-                "Left: %s -> %s\nRight: %s -> %s\n"
-                "Mode: %s\nLeft frames: %s\nRight frames: %s\n"
-                "Reference compensation: %s\n\n"
-                "MA: %s\nCast: %s\nSMD: %s\nFBX: %s\nManifest: %s"
-                % (
-                    _short_name(result.source_node),
-                    _short_name(result.target_node),
-                    _short_name(result.right_source_node),
-                    _short_name(result.right_target_node),
-                    result.animation_mode,
-                    result.left_clip_range,
-                    result.right_clip_range,
-                    _reference_pose_ui_summary(
-                        result.reference_pose_compensation),
-                    result.output_scene or "disabled",
-                    result.output_cast or "disabled",
-                    result.output_smd or "disabled",
-                    result.output_fbx or "disabled",
-                    result.output_manifest,
-                )),
-            button=["OK"],
-            defaultButton="OK",
-        )
+        _attachment_finished(result)
     except Exception as exc:
         _show_error("%s - Dual-Wield Error" % PRODUCT_SHORT_NAME, exc)
 
