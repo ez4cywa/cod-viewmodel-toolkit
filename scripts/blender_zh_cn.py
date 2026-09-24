@@ -5,7 +5,7 @@ import tokenize
 
 TEXT = {
     "CoD Viewmodel Toolkit": "CoD 视角模型工具包（简体中文）",
-    "CoD Viewmodel Toolkit 3.4.2": "CoD 视角模型工具包 3.4.2",
+    "CoD Viewmodel Toolkit 3.4.3": "CoD 视角模型工具包 3.4.3",
     "CAST single/dual weapon assembly and animation batch exports": "CAST 单武器／双持组装与动画批量导出",
     "Animation / Left": "动画／左侧动画",
     "Right Animation": "右侧动画",

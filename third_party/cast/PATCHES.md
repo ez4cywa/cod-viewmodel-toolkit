@@ -20,7 +20,7 @@ while retaining this license and patch record under `third_party/cast`.
 The bundled `cast.py` is byte-for-byte identical to the upstream v2.00
 release. The bundled `castplugin.py` is a project-maintained patch with
 SHA-256
-`5e28184d2fc4a24613ceeacc37006b3baaea82c4798ee0a97348f909f232fa00`.
+`08fd46b21c152eb6ef1aa01d1d4d23ad690134608e4c26853a75c224743fcd22`.
 
 ## Local changes to `castplugin.py`
 
@@ -41,6 +41,12 @@ SHA-256
    instead of per-vertex commands. Resolve physical indices from Maya's actual
    influence order, accumulate duplicate slots, disable normalization, and keep
    upstream's rigid-mesh weight of 1.0. Do not change scene evaluation/undo modes.
+9. Avoid per-vertex position slicing and per-face-corner nested UV lists when
+   preparing mesh buffers. Retain the exact UV table, assignments, normals,
+   colors and geometry; short optional UV buffers retain slice-based behavior.
+10. Expose an operation-local read session for the toolkit to share parsed CAST
+    documents between preflight and import. Revalidate path metadata on reads,
+    release on success/error, and never cache ordinary standalone imports.
 
 The toolkit also mirrors the active translator's normalization in its model
 and animation inventories, rejects ambiguous normalization collisions before

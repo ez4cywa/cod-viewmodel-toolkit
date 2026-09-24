@@ -87,7 +87,7 @@ COMMAND_NAME = "viewmodelWeaponToolkit"
 LEGACY_COMMAND_NAME = "attachGun"
 WINDOW_NAME = "ViewmodelWeaponToolkitWindow"
 DUAL_WINDOW_NAME = "ViewmodelWeaponToolkitDualWindow"
-VERSION = "3.4.2"
+VERSION = "3.4.3"
 
 VIEWHANDS_OPTVAR = "attachGun_viewhandsPath"
 OUTPUT_DIR_OPTVAR = "attachGun_outputDir"
@@ -642,10 +642,22 @@ def _cast_import_name(module, name):
     return str(sanitize(name) or "") if sanitize else str(name or "")
 
 
+@contextmanager
+def _cast_read_session():
+    """Reuse read-only documents only for this build, including nested builds."""
+    module = _castplugin_module()
+    session = getattr(module, "utilityCastReadSession", None)
+    if session is None:
+        yield  # Keep compatibility with separately installed upstream translators.
+    else:
+        with session():
+            yield
+
+
 def _cast_bone_inventory(path):
     """Read skeleton and mesh health with cast.py; do not modify the scene."""
     module = _castplugin_module()
-    cast_file = module.Cast.load(path)
+    cast_file = getattr(module, "utilityLoadCast", module.Cast.load)(path)
     bone_names = []
     bone_records = []
     imported_name_sources = {}
@@ -712,16 +724,18 @@ def _cast_bone_inventory(path):
             for mesh_index, mesh in enumerate(model.Meshes()):
                 mesh_count += 1
                 mesh_vertex_count = int(mesh.VertexCount() or 0)
-                mesh_faces = list(mesh.FaceBuffer() or [])
+                mesh_faces = mesh.FaceBuffer() or []
                 mesh_face_count = int(len(mesh_faces) / 3)
+                unique_indices = set(mesh_faces)
                 valid_indices = {
-                    int(index) for index in mesh_faces
-                    if 0 <= int(index) < mesh_vertex_count
+                    index for index in unique_indices
+                    if 0 <= index < mesh_vertex_count
                 }
-                mesh_invalid_indices = sum(
-                    1 for index in mesh_faces
-                    if int(index) < 0 or int(index) >= mesh_vertex_count
-                )
+                # CAST face indices are integers. Healthy meshes need no second
+                # Python walk over every face corner; malformed ones still count
+                # every invalid occurrence, not only unique invalid indices.
+                mesh_invalid_indices = (0 if len(valid_indices) == len(unique_indices)
+                                        else sum(index not in valid_indices for index in mesh_faces))
                 mesh_unused_vertices = max(
                     mesh_vertex_count - len(valid_indices), 0)
                 uv_mismatches = []
@@ -2669,6 +2683,7 @@ def _write_result_outputs(result, options, allocate=True):
     _write_manifest(result)
 
 
+@_cast_read_session()
 def _build_single_attachment(viewhands_path, weapon_path, options=None):
     """Build and validate a clean single-weapon scene, without exporting."""
     global _LAST_RESULT
@@ -3095,6 +3110,7 @@ def _dual_selected_hand_names(hands_joint_uuids, side, mode, master):
     return selected
 
 
+@_cast_read_session()
 def attach_dual_wield(
         viewhands_path,
         weapon_path,

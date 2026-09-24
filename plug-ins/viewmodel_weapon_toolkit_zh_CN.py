@@ -1,4 +1,4 @@
-"""Simplified Chinese entry point for CoD Viewmodel Toolkit 3.4.2.
+"""Simplified Chinese entry point for CoD Viewmodel Toolkit 3.4.3.
 
 This file reuses the English implementation beside it and localizes Maya UI
 text at the command boundary. Technical identifiers, joint names, file
@@ -17,7 +17,7 @@ import sys
 import maya.cmds as _maya_cmds
 
 
-VERSION = "3.4.2"
+VERSION = "3.4.3"
 _LOADER_FILE = globals().get("__file__") or sys._getframe().f_code.co_filename
 _CORE_PATH = os.path.join(
     os.path.dirname(os.path.abspath(_LOADER_FILE)),

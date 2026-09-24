@@ -2,6 +2,17 @@
 
 All notable changes to this project are documented here.
 
+## [3.4.3] - 2026-09-24
+
+- Further reduce Maya CAST import buffer allocation without changing UV tables,
+  normals, colors, topology or skin weights.
+- Reuse parsed documents within one attachment operation and release them on
+  success/error; count preflight face health using unique indices for healthy meshes.
+- Add alternating 3.4.2/current benchmarks with scene equivalence checks, cache
+  lifetime/invalidation checks, and malformed-face diagnostic comparisons.
+- See `docs/CAST_IMPORT_OPTIMIZATION.md` for measurements and validation.
+- Blender functionality is unchanged; package versions remain synchronized.
+
 ## [3.4.2] - 2026-09-23
 
 - Speed up Maya model attachment by writing CAST skin weights in bounded API

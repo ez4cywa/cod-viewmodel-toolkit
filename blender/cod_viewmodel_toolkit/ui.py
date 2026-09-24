@@ -337,7 +337,7 @@ def file_field(layout, props, name, label=None):
 
 
 class CODVWT_PT_main(bpy.types.Panel):
-    bl_label = "CoD Viewmodel Toolkit 3.4.2"
+    bl_label = "CoD Viewmodel Toolkit 3.4.3"
     bl_idname = "CODVWT_PT_main"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"

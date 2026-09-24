@@ -4,6 +4,8 @@ import json
 import math
 import sys
 import string
+import itertools
+from contextlib import contextmanager
 
 import maya.mel as mel
 import maya.cmds as cmds
@@ -60,6 +62,35 @@ runtimeSettings = {
 
 # Shared version number
 version = "2.00"
+
+# Scoped to a toolkit build; ordinary file imports never retain documents.
+_castReadCache = None
+
+
+@contextmanager
+def utilityCastReadSession():
+    global _castReadCache
+    if _castReadCache is not None:
+        yield
+        return
+    _castReadCache = {}
+    try:
+        yield
+    finally:
+        _castReadCache = None
+
+
+def utilityLoadCast(path):
+    if _castReadCache is None:
+        return Cast.load(path)
+    identity = os.path.normcase(os.path.realpath(path))
+    info = os.stat(path)
+    signature = (info.st_size, info.st_mtime_ns, info.st_ctime_ns)
+    cached = _castReadCache.get(identity)
+    if cached is None or cached[0] != signature:
+        cached = (signature, Cast.load(path))
+        _castReadCache[identity] = cached
+    return cached[1]
 
 # Time unit to framerate map
 framerateMap = {
@@ -1934,8 +1965,9 @@ def importModelNode(model, path):
 
         vertexPositions = mesh.VertexPositionBuffer()
         scriptUtil = OpenMaya.MScriptUtil()
-        scriptUtil.createFromList([x for y in (vertexPositions[i:i + 3] + tuple([1.0]) *
-                                               (i < len(vertexPositions) - 2) for i in xrange(0, len(vertexPositions), 3)) for x in y], vertexCount)
+        scriptUtil.createFromList(list(itertools.chain.from_iterable(zip(
+            vertexPositions[0::3], vertexPositions[1::3], vertexPositions[2::3],
+            itertools.repeat(1.0)))), vertexCount)
 
         vertexPositionBuffer = \
             OpenMaya.MFloatPointArray(scriptUtil.asFloat4Ptr(), vertexCount)
@@ -1951,8 +1983,7 @@ def importModelNode(model, path):
         newMesh.setName(utilitySanitize(mesh.Name()) or "CastShape")
 
         scriptUtil = OpenMaya.MScriptUtil()
-        scriptUtil.createFromList(
-            [x for x in xrange(vertexCount)], vertexCount)
+        scriptUtil.createFromList(range(vertexCount), vertexCount)
 
         vertexIndexBuffer = OpenMaya.MIntArray(
             scriptUtil.asIntPtr(), vertexCount)
@@ -1964,8 +1995,7 @@ def importModelNode(model, path):
         vertexNormals = mesh.VertexNormalBuffer()
         if vertexNormals is not None:
             scriptUtil = OpenMaya.MScriptUtil()
-            scriptUtil.createFromList([x for x in vertexNormals],
-                                      len(vertexNormals))
+            scriptUtil.createFromList(vertexNormals, len(vertexNormals))
 
             vertexNormalBuffer = OpenMaya.MVectorArray(scriptUtil.asFloat3Ptr(),
                                                        int(len(vertexNormals) / 3))
@@ -1998,7 +2028,7 @@ def importModelNode(model, path):
         uvLayerCount = mesh.UVLayerCount()
 
         scriptUtil = OpenMaya.MScriptUtil()
-        scriptUtil.createFromList([x for x in xrange(len(faces))], len(faces))
+        scriptUtil.createFromList(range(len(faces)), len(faces))
 
         faceIndexBuffer = OpenMaya.MIntArray(
             scriptUtil.asIntPtr(), len(faces))
@@ -2017,16 +2047,21 @@ def importModelNode(model, path):
 
         for i in xrange(uvLayerCount):
             uvLayer = mesh.VertexUVLayerBuffer(i)
+            if len(uvLayer) >= vertexCount * 2:
+                uValues = [uvLayer[index * 2] for index in faces]
+                vValues = [1.0 - uvLayer[index * 2 + 1] for index in faces]
+            else:
+                # Preserve upstream slice behavior for short optional UV buffers.
+                uValues = [value for index in faces for value in uvLayer[index * 2:index * 2 + 1]]
+                vValues = [1.0 - value for index in faces for value in uvLayer[index * 2 + 1:index * 2 + 2]]
             scriptUtil = OpenMaya.MScriptUtil()
-            scriptUtil.createFromList([y for xs in [uvLayer[faces[x] * 2:faces[x] * 2 + 1]
-                                                    for x in xrange(len(faces))] for y in xs], len(faces))
+            scriptUtil.createFromList(uValues, len(faces))
 
             uvUBuffer = OpenMaya.MFloatArray(
                 scriptUtil.asFloatPtr(), len(faces))
 
             scriptUtil = OpenMaya.MScriptUtil()
-            scriptUtil.createFromList([1.0 - y for xs in [uvLayer[faces[x] * 2 + 1:faces[x] * 2 + 2]
-                                                          for x in xrange(len(faces))] for y in xs], len(faces))
+            scriptUtil.createFromList(vValues, len(faces))
 
             uvVBuffer = OpenMaya.MFloatArray(
                 scriptUtil.asFloatPtr(), len(faces))
@@ -2650,7 +2685,7 @@ def importMetadata(meta):
 
 
 def importCast(path):
-    cast = Cast.load(path)
+    cast = utilityLoadCast(path)
 
     instances = []
     meta = None
