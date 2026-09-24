@@ -1,7 +1,9 @@
-# Blender — CoD Viewmodel Toolkit 3.4.3
+# Blender — CoD Viewmodel Toolkit 3.5.0
 
-The 3.4.3 release also offers `cod-viewmodel-toolkit-3.4.3-blender-zh-CN.zip`.
-Blender functionality is unchanged from 3.4.0; this patch fixes Maya animation imports.
+The 3.5.0 release also offers `cod-viewmodel-toolkit-3.5.0-blender-zh-CN.zip`.
+The 3.5.0 integration improvements target Maya. Blender retains its patched
+CAST 2.00 backend and existing import/export algorithms; its package version
+is synchronized, with no new Blender functionality.
 It localizes the add-on UI without changing Blender's language. English and
 Chinese packages share the same module: stop batches and disable the old
 edition before installing and enabling the other. Do not load renamed copies
@@ -10,13 +12,13 @@ English. Both editions contain identical assembly/export logic.
 
 [简体中文](BLENDER.zh-CN.md) · [Project](../README.md)
 
-Requires Blender 5.2+; verified with official Blender 5.2.1 LTS on Windows.
+Requires Blender 5.2+; prior releases were verified with official Blender 5.2.1 LTS on Windows.
 Earlier Blender versions are not supported by this edition. The Maya edition
 remains independent. No game assets, Blender executable or Maya runtime are bundled.
 
 ## Install
 
-1. Download `cod-viewmodel-toolkit-3.4.3-blender-en.zip` (English) or `cod-viewmodel-toolkit-3.4.3-blender-zh-CN.zip` (Simplified Chinese).
+1. Download `cod-viewmodel-toolkit-3.5.0-blender-en.zip` (English) or `cod-viewmodel-toolkit-3.5.0-blender-zh-CN.zip` (Simplified Chinese).
 2. In Blender, open Edit > Preferences > Add-ons > menu > Install from Disk.
    Select the ZIP as a legacy add-on and enable **CoD Viewmodel Toolkit**.
 3. In the 3D Viewport press `N`, then select **Viewmodel**.

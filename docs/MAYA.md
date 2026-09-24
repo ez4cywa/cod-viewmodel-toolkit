@@ -10,7 +10,7 @@
   Windows-only `os.startfile` integration; core Maya workflows are not yet
   certified on macOS or Linux.
 - The release archives include a project-patched Maya translator based on
-  [dtzxporter/cast v2.00](https://github.com/dtzxporter/cast/releases/tag/v2.00).
+  [dtzxporter/cast v2.01](https://github.com/dtzxporter/cast/releases/tag/v2.01).
   No separate CAST download is required when installing from a release ZIP.
 - CAST files whose skeleton names follow the conventions described below.
 
@@ -21,13 +21,14 @@ baseline, hashes, and local changes.
 
 ## Installation
 
-1. Back up any existing `castplugin.py` and `cast.py` in your target Maya
-   plug-in directory. Do not copy or overwrite `cast.cfg`; it contains your
-   personal CAST preferences.
+1. Save your scene, close Maya and back up your toolkit files before upgrading.
+   Leave an independently installed `castplugin.py`, `cast.py` and `cast.cfg`
+   unchanged; the toolkit no longer installs over these files.
 2. Choose one release edition and copy the complete contents of its
    `plug-ins` directory into a directory on `MAYA_PLUG_IN_PATH`, such as your
-   Maya user `plug-ins` directory. Both editions include the patched CAST
-   2.00 translator:
+   Maya user `plug-ins` directory. Copy subdirectories too. Both editions include
+   `cod_viewmodel_cast_backend.py` and `cod_viewmodel_cast/{cast.py,castplugin.py}`
+   alongside `cod_viewmodel_units.py` and the toolkit entry files:
    - English: `viewmodel_weapon_toolkit.py`.
    - Simplified Chinese: `viewmodel_weapon_toolkit.py` plus
      `viewmodel_weapon_toolkit_zh_CN.py` (the first file is the shared core).
@@ -38,13 +39,37 @@ baseline, hashes, and local changes.
    or `viewmodel_weapon_toolkit_zh_CN.py` for Simplified Chinese.
 5. Open the **CoD Viewmodel Toolkit** menu in Maya's main menu bar.
 
-For a source checkout, copy `third_party/cast/cast.py` and
-`third_party/cast/castplugin.py` beside the selected toolkit entry files.
+For a source checkout, load the selected entry directly from `plug-ins`. The
+backend resolves `third_party/cast` automatically; do not copy its files beside
+the entry. For release installs, keep the `cod_viewmodel_cast` folder intact.
+Do not load its nested `castplugin.py` as a separate Maya plugin.
 
 The plugin registers both `viewmodelWeaponToolkit` and the legacy
 `attachGun` Maya commands. Loading either command opens the single-weapon
 builder. The English, Chinese, and legacy entry points register the same
 commands, so enable auto-load for only one edition at a time.
+
+### Private CAST backend
+
+The toolkit registers `CoDToolkitCast`, separate from an external plugin's
+`Cast` translator. It always uses the bundled implementation, regardless of
+external CAST load order. GUI and batch workflows share this same backend;
+per-operation options and runtime settings are restored on success or failure,
+without loading or rewriting personal `cast.cfg` preferences.
+
+Single/dual animation routing uses explicit full DAG paths rather than
+temporarily renaming scene joints. Existing persistent assembly names, including
+dual `akimbo_l_` / `akimbo_r_` prefixes, remain unchanged. Each clip has fresh
+node, rest-transform and curve lookup caches. A single-animation drop regression
+measured one physical CAST parse instead of four; separate operations still
+reread the file, and changed files invalidate an active read session.
+
+CAST 2.01 fixes exported skeleton parent indices beneath transform groups.
+The project also fixes multiple curve-mode overrides being reduced to the last
+entry, preserving independent translation/rotation/scale flags. These are
+correctness fixes, not performance claims. See [3.5.0 notes](RELEASE_NOTES_3.5.0.md),
+[backend design research](CAST_BACKEND_RESEARCH.md) and
+[measurement details](CAST_BACKEND_BENCHMARK.md).
 
 ## Expected skeletons
 
@@ -113,6 +138,10 @@ All output formats are optional. Each enabled format can target a different
 folder. Existing files are not overwritten: the toolkit appends a version
 suffix such as `_v001`.
 
+Attachment completion remains non-modal: successful builds do not open a
+completion dialog. Errors, partial export failures and unsaved-scene prompts
+remain visible.
+
 ## Batch animation workflow
 
 1. Open **Single Animation Batch...** or **Dual Animation Batch...** from
@@ -152,8 +181,9 @@ the remaining animation is still imported.
 
 | Support level | Environment | Status |
 | --- | --- | --- |
-| Minimum expected | Maya 2022, Python 3.7.7, patched CAST 2.00 | Source syntax and required Maya APIs are compatible; asset-based workflows have not been regression-tested on Maya 2022. |
-| Release verified | Maya 2025, Python 3.11.4, patched CAST 2.00, Windows | Single-weapon, dual-wield, localization, and export release target. |
+| Minimum expected | Maya 2022, Python 3.7.7, private patched CAST 2.01 | Python 3.7 syntax/API compatibility target; no full Maya 2022 host regression. |
+| Current verification | Maya 2027, Python 3.13.9, private patched CAST 2.01, Windows | 3.5.0 backend identity, parent indices, target routing and operation-lifetime regressions run in this host. See release notes for the completed checks. |
+| Historical verification | Maya 2025, Python 3.11.4, earlier bundled CAST versions, Windows | Prior releases verified single/dual workflows, localization and exports; not re-tested for 3.5.0. |
 
 Maya 2022 on Windows or Linux can also be launched in Python 2 mode; this
 toolkit must run in Python 3 mode. Maya 2021 and older are unsupported. The
@@ -175,6 +205,9 @@ mayapy tests/verify_plugin_identity.py
 mayapy tests/verify_reference_pose_compensation.py
 mayapy tests/verify_batch_animation_export.py
 mayapy tests/verify_cast_v200.py
+mayapy tests/verify_cast_v201.py
+mayapy tests/verify_private_cast_backend.py
+mayapy tests/verify_animation_read_session.py
 mayapy tests/verify_maya_drop_module_path.py
 ```
 
@@ -182,7 +215,9 @@ Batch regression tests generate synthetic CAST fixtures, check both dual
 playback modes and all four outputs, and compare FBX round-trip samples.
 Game assets are not included in the public repository.
 See [batch verification notes](BATCH_ANIMATION_VERIFICATION.md) for coverage.
-See [3.2.0 verification](VERIFICATION_3.2.0.md) for CAST 2.00 and native UI checks.
+See [3.5.0 notes](RELEASE_NOTES_3.5.0.md) and
+[backend measurements](CAST_BACKEND_BENCHMARK.md) for this release; the
+[3.2.0 verification](VERIFICATION_3.2.0.md) records historical CAST 2.00/native UI checks.
 
 Build all four platform/language archives with `python scripts/build_release.py <output-dir>`.
 

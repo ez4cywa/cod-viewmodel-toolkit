@@ -158,7 +158,7 @@ def run(directory):
     plugin = ROOT / "plug-ins" / "viewmodel_weapon_toolkit.py"
     cmds.loadPlugin(str(plugin), quiet=True)
     module = _module_from_path(plugin)
-    assert module._castplugin_module().version == "2.00"
+    assert module._castplugin_module().version == "2.01"
     cast_settings = dict(module._castplugin_module().sceneSettings)
     hands, weapon = directory / "hands.cast", directory / "weapon.cast"
     make_model(module, hands, True)

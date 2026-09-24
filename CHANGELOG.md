@@ -2,6 +2,32 @@
 
 All notable changes to this project are documented here.
 
+## [3.5.0] - 2026-09-24
+
+- Integrate a private Maya CAST 2.01 backend and `CoDToolkitCast` translator,
+  independent of any external CAST plugin's load order, module or settings.
+- Package the backend in `plug-ins/cod_viewmodel_cast`, with the loader beside
+  the toolkit. Do not replace standalone CAST files or distribute `cast.cfg`.
+  Source checkouts resolve `third_party/cast` without copying runtime files.
+- Share backend implementation and exception-safe operation options between GUI
+  and batch workflows. Retain the existing English, Chinese and legacy entries.
+- Extend operation-local parsed-document reuse to animation drops/imports;
+  the single-animation drop regression reduces physical parses from four to one.
+- Reuse the animation time range instead of querying all key times twice.
+  The measured 200-bone/240-frame synthetic import median is 18.3% lower;
+  this is not a speed claim for all animations or model imports.
+- Route single/dual animation through explicit DAG targets instead of temporary
+  joint renaming. Cache node/rest/curve lookup per clip and restore nested state
+  on errors; retain absolute, relative and additive track semantics.
+- Merge upstream 2.01's skeleton-parent export fix and separately fix multiple
+  curve-mode override handling. Preserve existing mesh/skin import patches,
+  attachment rules, output DQS behavior and error feedback.
+- Add private-backend coexistence, target-routing, settings-lifetime and parse
+  regressions in Maya 2027. See `docs/RELEASE_NOTES_3.5.0.md` and
+  `docs/CAST_BACKEND_BENCHMARK.md` for scope and measurement limitations.
+- Blender remains on its patched CAST 2.00 backend; only package versions are
+  synchronized, with no Blender import/export algorithm changes.
+
 ## [3.4.3] - 2026-09-24
 
 - Further reduce Maya CAST import buffer allocation without changing UV tables,

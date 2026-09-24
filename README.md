@@ -27,7 +27,7 @@ A local toolkit for Call of Duty first-person CAST models and skeletal animation
 | Export a set of animations | Queue single clips or explicit left/right pairs, choose formats and separate folders, and inspect per-item JSON reports. |
 | Deliver meter-scaled assets | Optionally convert output copies from assumed feet to meters; keep the source files and working assembly unchanged. |
 
-Both platforms include their own project-patched [CAST 2.00](https://github.com/dtzxporter/cast/releases/tag/v2.00) backend. Blender does not require Maya. Models, animations and textures are supplied by you; no game assets or host applications are bundled.
+Maya includes a private, project-patched [CAST 2.01](https://github.com/dtzxporter/cast/releases/tag/v2.01) backend; Blender retains its project-patched CAST 2.00 backend and does not require Maya. Models, animations and textures are supplied by you; no game assets or host applications are bundled.
 
 ```mermaid
 flowchart LR
@@ -43,23 +43,25 @@ flowchart LR
 
 ## Download and install
 
-Current release: **3.4.3**. Further accelerates Maya CAST import through leaner mesh buffers and operation-local parsed-document reuse. Scene fidelity and error feedback are preserved; Blender behavior is unchanged. [Release notes](docs/RELEASE_NOTES_3.4.3.md).
+Current release: **3.5.0**. Maya now consistently uses its private CAST 2.01 backend, reuses animation parsing within an operation and routes animation through explicit DAG targets without temporary joint renaming. Includes the upstream skeleton-parent fix and a project curve-mode override fix. Blender behavior is unchanged. [Release notes](docs/RELEASE_NOTES_3.5.0.md).
 
 | Host | English ZIP | 简体中文 ZIP | Runtime |
 | --- | --- | --- | --- |
-| Maya | [Download](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/download/3.4.3/cod-viewmodel-toolkit-3.4.3-maya-en.zip) | [下载](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/download/3.4.3/cod-viewmodel-toolkit-3.4.3-maya-zh-CN.zip) | Maya 2027 / Windows verified in 3.4.3; Maya 2025 verified in prior releases; targets Maya 2022+ in Python 3 mode. |
-| Blender | [Download](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/download/3.4.3/cod-viewmodel-toolkit-3.4.3-blender-en.zip) | [下载](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/download/3.4.3/cod-viewmodel-toolkit-3.4.3-blender-zh-CN.zip) | Requires Blender 5.2+; Blender 5.2.1 LTS / Windows verified. |
+| Maya | [Download](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/download/3.5.0/cod-viewmodel-toolkit-3.5.0-maya-en.zip) | [下载](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/download/3.5.0/cod-viewmodel-toolkit-3.5.0-maya-zh-CN.zip) | Maya 2027 / Windows is the current verification host; Maya 2025 was verified in prior releases; targets Maya 2022+ in Python 3 mode. |
+| Blender | [Download](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/download/3.5.0/cod-viewmodel-toolkit-3.5.0-blender-en.zip) | [下载](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/download/3.5.0/cod-viewmodel-toolkit-3.5.0-blender-zh-CN.zip) | Requires Blender 5.2+; Blender 5.2.1 LTS / Windows verified in prior releases. |
 
-Download a **platform/language ZIP**, not GitHub's automatically generated “Source code” archive. [SHA-256 checksums](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/download/3.4.3/SHA256SUMS.txt) are included in the release. Python runs inside the selected host; no separate Python installation is needed for normal use.
+Download a **platform/language ZIP**, not GitHub's automatically generated “Source code” archive. [SHA-256 checksums](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/download/3.5.0/SHA256SUMS.txt) are included in the release. Python runs inside the selected host; no separate Python installation is needed for normal use.
 
 ### Maya
 
 1. Save your work and close Maya before upgrading. Back up existing plugin files; keep your personal `cast.cfg` unchanged.
-2. Extract the ZIP and copy **all files** from `plug-ins` into a directory on `MAYA_PLUG_IN_PATH`. Keep `cod_viewmodel_units.py`, `cast.py` and `castplugin.py` beside the core file.
+2. Extract the ZIP and copy **all files and folders** from `plug-ins` into a directory on `MAYA_PLUG_IN_PATH`. Keep `cod_viewmodel_units.py`, `cod_viewmodel_cast_backend.py` and the complete `cod_viewmodel_cast` folder beside the core file. Do not overwrite an independently installed `cast.py`, `castplugin.py` or `cast.cfg`.
 3. Open Maya's Plug-in Manager. Load `viewmodel_weapon_toolkit.py` for English, or `viewmodel_weapon_toolkit_zh_CN.py` for Chinese. Enable only one language entry point.
 4. Open **CoD Viewmodel Toolkit** / **CoD 视角模型工具包** in the main menu.
 
 Upgrading from Attach Gun? The legacy `attach_gun.py` and `attachGun` command remain supported. See [installation and compatibility](docs/MAYA.md#installation) before switching entry points.
+
+The toolkit registers its own `CoDToolkitCast` translator. An existing external CAST plugin may remain installed: its version and preferences no longer select the toolkit's backend. Load only the toolkit entry point, not the nested `cod_viewmodel_cast/castplugin.py`. Source checkouts can load their entry point directly without copying files from `third_party`.
 
 ### Blender
 
@@ -124,6 +126,8 @@ Detailed behavior: [Maya guide](docs/MAYA.md) · [Blender guide](docs/BLENDER.md
 
 **Some animation tracks have no matching bone.** Extra tracks such as `j_gripsafety` can be skipped with a warning. A warning is not proof the entire import failed; inspect the remaining keys and the result report.
 
+**What improved in 3.5.0?** GUI and batch operations share the same private backend and operation-local options. A tested single-animation drop now parses its CAST file once instead of four times. Animation targets use full DAG paths, with lookup caches discarded after each clip. This parse count is not a promise of a fixed speedup; see [measurements](docs/CAST_BACKEND_BENCHMARK.md). Attachment rules, output skinning and error dialogs are unchanged; successful attachment still has no completion dialog.
+
 ## Build and verify
 
 For contributors; normal installation uses the ZIPs above. Run from the repository root:
@@ -134,13 +138,16 @@ cd cod-viewmodel-toolkit
 python tests/verify_vendored_cast.py
 python tests/verify_vendored_blender_cast.py
 mayapy tests/verify_plugin_identity.py
+mayapy tests/verify_private_cast_backend.py
+mayapy tests/verify_cast_v201.py
+mayapy tests/verify_animation_read_session.py
 mayapy tests/verify_maya_drop_module_path.py
 python scripts/build_release.py ../release-output
 ```
 
 `mayapy` is Maya's Python executable; use its full path if it is not on `PATH`. The build command produces **four** platform/language ZIPs and refuses to overwrite existing archives. Source installation details are in the [Maya](docs/MAYA.md#installation) and [Blender](docs/BLENDER.md#install) guides.
 
-GitHub Actions runs syntax, bundled-backend integrity and generated-asset checks. It does **not** run Maya or Blender. Host-dependent verification is documented separately: [3.4.1 import fix](docs/VERIFICATION_3.4.1.md), [metric outputs](docs/VERIFICATION_3.4.0.md), [Maya/Blender](docs/VERIFICATION_3.3.0.md), [animation batches](docs/BATCH_ANIMATION_VERIFICATION.md). Maya 2022 compatibility is based on Python 3.7 syntax/API assessment, not a full host regression run.
+GitHub Actions runs syntax, bundled-backend integrity and generated-asset checks. It does **not** run Maya or Blender. Host-dependent verification is documented separately: [3.5.0 backend measurements](docs/CAST_BACKEND_BENCHMARK.md), [3.4.1 import fix](docs/VERIFICATION_3.4.1.md), [metric outputs](docs/VERIFICATION_3.4.0.md), [Maya/Blender](docs/VERIFICATION_3.3.0.md), [animation batches](docs/BATCH_ANIMATION_VERIFICATION.md). Maya 2022 compatibility is based on Python 3.7 syntax/API assessment, not a full host regression run.
 
 ## Project layout
 

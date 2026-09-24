@@ -17,7 +17,7 @@ def main():
     cmds.loadPlugin(str(plugin), quiet=True)
     module = _module_from_path(plugin)
     cast_module = module._castplugin_module()
-    assert cast_module.version == "2.00"
+    assert cast_module.version == "2.01"
     with tempfile.TemporaryDirectory(prefix="vwt_cast200_") as directory:
         directory = Path(directory)
         hands, weapon = directory / "hands.cast", directory / "weapon.cast"

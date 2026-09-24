@@ -1,4 +1,4 @@
-"""Static integrity checks for the bundled patched CAST v2.00 translator."""
+"""Static integrity checks for the bundled patched CAST v2.01 translator."""
 
 import ast
 import hashlib
@@ -14,7 +14,7 @@ CAST_MODULE_SHA256 = (
     "d1ff7fcb2a184f208b21be34485d1863834ae33811078a28a2ccf6ff61f2c577"
 )
 CAST_PLUGIN_SHA256 = (
-    "08fd46b21c152eb6ef1aa01d1d4d23ad690134608e4c26853a75c224743fcd22"
+    "ec6a625e0dab48af5b244a010a78962932cc6a32a5ee5d00ef5a2b4c98f90513"
 )
 
 
@@ -37,13 +37,16 @@ def main():
         _parse_as_python37(source, path)
 
     if _sha256(CAST_MODULE) != CAST_MODULE_SHA256:
-        raise RuntimeError("Bundled cast.py differs from upstream v2.00")
+        raise RuntimeError("Bundled cast.py differs from the unchanged upstream v2.01 serializer")
     if _sha256(CAST_PLUGIN) != CAST_PLUGIN_SHA256:
         raise RuntimeError("Bundled patched castplugin.py changed unexpectedly")
 
     plugin_source = CAST_PLUGIN.read_text(encoding="utf-8")
     required_markers = (
-        'version = "2.00"',
+        'version = "2.01"',
+        'def utilityOperationOptions(options=None, runtime=None):',
+        'def utilityAnimationTargets(targets=None):',
+        'type=fileTranslatorName',
         "def utilityApplyTranslatorOptions(optionString, supportedNames):",
         'if cmds.about(batch=True):',
         'missingUVs = {}',

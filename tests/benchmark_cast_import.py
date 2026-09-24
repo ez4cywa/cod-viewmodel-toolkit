@@ -32,7 +32,17 @@ def baseline_module(relative, name):
     module.__file__ = str(ROOT / relative)
     sys.modules[name] = module
     source = subprocess.check_output(["git", "show", BASELINE + ":" + relative], cwd=str(ROOT))
-    exec(compile(source, name + ".py", "exec"), module.__dict__)
+    # Keep the legacy algorithm's serializer identity compatible with the
+    # current translator without importing/overwriting public CAST modules.
+    serializer = sys.modules[core._castplugin_module().Cast.__module__]
+    with patch.dict(sys.modules, {"cast": serializer}):
+        exec(compile(source, name + ".py", "exec"), module.__dict__)
+    if relative.startswith("plug-ins/"):
+        module.ensure_cast_plugin = core.ensure_cast_plugin
+        module._castplugin_module = core._castplugin_module
+        module._loaded_castplugin_modules = lambda: [core._castplugin_module()]
+        module.cast_translator_name = core.cast_translator_name
+        module.cast_plugin_version = core.cast_plugin_version
     return module
 
 

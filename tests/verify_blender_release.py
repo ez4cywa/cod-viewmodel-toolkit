@@ -26,10 +26,14 @@ from cod_viewmodel_toolkit.backend import backend
 
 assert Path(cod_viewmodel_toolkit.__file__).resolve().is_relative_to(scripts)
 assert Path(backend().importer.__file__).parent.name == "vendor_cast"
-assert cod_viewmodel_toolkit.bl_info["version"] == (3, 4, 3)
+assert cod_viewmodel_toolkit.bl_info["version"] == (3, 5, 0)
+assert core.VERSION == "3.5.0"
 assert hasattr(bpy.types.Scene, "cod_vwt")
+from cod_viewmodel_toolkit import ui
+expected_title = ("CoD 视角模型工具包 3.5.0" if "zh-CN" in archive.name
+                  else "CoD Viewmodel Toolkit 3.5.0")
+assert ui.CODVWT_PT_main.bl_label == expected_title
 if "zh-CN" in archive.name:
-    from cod_viewmodel_toolkit import ui
     assert "简体中文" in cod_viewmodel_toolkit.bl_info["name"]
     assert ui.CODVWT_OT_build.bl_label == "组装模型"
     assert ui.CODVWT_PT_output.bl_label == "输出文件"

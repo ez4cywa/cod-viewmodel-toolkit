@@ -17,16 +17,18 @@ def build(output, blender_zh_only=False):
     common = {name: name for name in (
         "CHANGELOG.md", "LICENSE", "README.md", "README.zh-CN.md",
         "SECURITY.md", "THIRD_PARTY_NOTICES.md", "docs/OUTPUT_UNITS.md", "docs/VERIFICATION_3.4.0.md",
-        "plug-ins/viewmodel_weapon_toolkit.py", "plug-ins/cod_viewmodel_units.py", "third_party/cast/LICENSE",
+        "plug-ins/viewmodel_weapon_toolkit.py", "plug-ins/cod_viewmodel_units.py",
+        "plug-ins/cod_viewmodel_cast_backend.py", "third_party/cast/LICENSE",
         "third_party/cast/PATCHES.md", "docs/BATCH_ANIMATION_VERIFICATION.md",
         "docs/VERIFICATION_3.2.0.md", "docs/RELEASE_NOTES_3.2.0.md",
         "docs/VERIFICATION_3.3.0.md", "docs/RELEASE_NOTES_3.3.0.md", "docs/RELEASE_NOTES_3.4.0.md",
         "docs/BLENDER.md", "docs/BLENDER.zh-CN.md", "docs/RELEASE_NOTES_3.4.1.md",
         "docs/VERIFICATION_3.4.1.md", "docs/MAYA.md", "docs/MAYA.zh-CN.md",
         "docs/RELEASE_NOTES_3.4.2.md", "docs/RELEASE_NOTES_3.4.3.md",
-        "docs/CAST_IMPORT_OPTIMIZATION.md")}
+        "docs/CAST_IMPORT_OPTIMIZATION.md", "docs/RELEASE_NOTES_3.5.0.md",
+        "docs/CAST_BACKEND_RESEARCH.md", "docs/CAST_BACKEND_BENCHMARK.md")}
     for name in ("cast.py", "castplugin.py"):
-        common["plug-ins/" + name] = "third_party/cast/" + name
+        common["plug-ins/cod_viewmodel_cast/" + name] = "third_party/cast/" + name
     for edition in (() if blender_zh_only else ("en", "zh-CN")):
         files = dict(common)
         entry = ("attach_gun.py" if edition == "en" else
@@ -48,6 +50,8 @@ def build(output, blender_zh_only=False):
                 if isinstance(node, ast.Assign) and any(isinstance(target, ast.Name)
                 and target.id == "bl_info" for target in node.targets))
     assert ".".join(map(str, info["version"])) == version
+    core_source = (ROOT / "blender/cod_viewmodel_toolkit/core.py").read_text(encoding="utf-8")
+    assert re.search(r'^VERSION = "([0-9.]+)"$', core_source, re.MULTILINE).group(1) == version
     files = {name + ".py": "blender/cod_viewmodel_toolkit/" + name + ".py"
              for name in ("__init__", "backend", "core", "animation", "exporting", "fbx", "ui", "units")}
     for name in ("__init__.py", "import_cast.py", "export_cast.py", "shared_cast.py", "PATCHES.md"):
@@ -63,7 +67,9 @@ def build(output, blender_zh_only=False):
                  "docs/RELEASE_NOTES_3.3.0.md", "docs/RELEASE_NOTES_3.4.0.md",
                  "docs/RELEASE_NOTES_3.4.1.md", "docs/VERIFICATION_3.4.1.md",
                  "docs/MAYA.md", "docs/MAYA.zh-CN.md", "docs/RELEASE_NOTES_3.4.2.md",
-                 "docs/RELEASE_NOTES_3.4.3.md", "docs/CAST_IMPORT_OPTIMIZATION.md"):
+                 "docs/RELEASE_NOTES_3.4.3.md", "docs/CAST_IMPORT_OPTIMIZATION.md",
+                 "docs/RELEASE_NOTES_3.5.0.md", "docs/CAST_BACKEND_RESEARCH.md",
+                 "docs/CAST_BACKEND_BENCHMARK.md"):
         files[name] = name
     from blender_zh_cn import localize
     for edition in (("zh-CN",) if blender_zh_only else ("en", "zh-CN")):

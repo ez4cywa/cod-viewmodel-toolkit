@@ -33,15 +33,15 @@ def _assert_loaded(path, plugin_name):
     version = str(cmds.pluginInfo(plugin_name, query=True, version=True))
     if not _same_path(loaded_path, path):
         raise RuntimeError("Maya loaded the wrong path: %s" % loaded_path)
-    if version != "3.4.3":
-        raise RuntimeError("Expected version 3.4.3, got %s" % version)
+    if version != "3.5.0":
+        raise RuntimeError("Expected version 3.5.0, got %s" % version)
     if not hasattr(cmds, "viewmodelWeaponToolkit"):
         raise RuntimeError("viewmodelWeaponToolkit command is missing")
     if not hasattr(cmds, "attachGun"):
         raise RuntimeError("attachGun compatibility command is missing")
 
 
-def _assert_vendored_cast_loaded(expected_path):
+def _assert_external_cast_loaded(expected_path):
     loaded_path = cmds.pluginInfo("castplugin", query=True, path=True)
     version = str(cmds.pluginInfo("castplugin", query=True, version=True))
     translators = cmds.pluginInfo(
@@ -49,16 +49,34 @@ def _assert_vendored_cast_loaded(expected_path):
     if isinstance(translators, str):
         translators = [translators]
     if not _same_path(loaded_path, expected_path):
-        raise RuntimeError("Maya loaded the wrong CAST plugin: %s" % loaded_path)
-    if version != "2.00":
-        raise RuntimeError("Expected bundled CAST 2.00, got %s" % version)
+        raise RuntimeError("Maya loaded the wrong external CAST plugin: %s" % loaded_path)
+    if version != "2.01":
+        raise RuntimeError("Expected external fixture CAST 2.01, got %s" % version)
     if not any(str(name).lower() == "cast" for name in translators):
-        raise RuntimeError("Bundled CAST translator is not registered")
+        raise RuntimeError("External CAST translator is not registered")
     cast_module = sys.modules.get("cast")
     expected_module = pathlib.Path(expected_path).parent / "cast.py"
     if cast_module is None or not _same_path(
             getattr(cast_module, "__file__", ""), expected_module):
-        raise RuntimeError("Bundled cast.py was not loaded beside castplugin.py")
+        raise RuntimeError("External cast.py was not loaded beside castplugin.py")
+
+
+def _assert_private_cast_loaded(owner):
+    package = sys.modules.get("_cod_viewmodel_cast")
+    if package is None:
+        raise RuntimeError("The toolkit private CAST package is missing")
+    backend = package._backend
+    if not _same_path(backend.module.__file__, VENDORED_CAST):
+        raise RuntimeError("The toolkit used external CAST instead of its private backend")
+    if backend.module.Cast is not package.cast.Cast:
+        raise RuntimeError("Private CAST serializer identity is inconsistent")
+    if backend.module.Cast is sys.modules["cast"].Cast:
+        raise RuntimeError("The toolkit borrowed the external serializer")
+    if backend.info()["owner"] != owner:
+        raise RuntimeError("Wrong private translator owner: %s" % backend.info())
+    if cmds.pluginInfo(owner, query=True, translator=True) != ["CoDToolkitCast"]:
+        raise RuntimeError("Private CAST translator is not registered to the toolkit")
+    return backend
 
 
 def _module_from_path(path):
@@ -165,21 +183,23 @@ def main():
     shutil.copy2(str(VENDORED_CAST_MODULE), str(runtime_cast_dir / "cast.py"))
     shutil.copy2(str(VENDORED_CAST), str(runtime_cast))
     cmds.loadPlugin(str(runtime_cast), quiet=True)
-    _assert_vendored_cast_loaded(runtime_cast)
+    _assert_external_cast_loaded(runtime_cast)
 
     cmds.loadPlugin(str(PRIMARY), quiet=True)
     cmds.loadPlugin(str(LEGACY), quiet=True)
     _assert_loaded(PRIMARY, "viewmodel_weapon_toolkit")
     _assert_loaded(LEGACY, "attach_gun")
+    backend = _assert_private_cast_loaded("viewmodel_weapon_toolkit")
+    _assert_external_cast_loaded(runtime_cast)
     primary_module = _module_from_path(PRIMARY)
     about = primary_module._about_message()
     required_about = (
-        "CoD Viewmodel Toolkit v3.4.3",
+        "CoD Viewmodel Toolkit v3.5.0",
         "WORKFLOWS",
         "ANIMATION & EXPORT",
         "DQS skinning",
         "Maya 2022+",
-        "patched CAST 2.00",
+        "Bundled private CAST 2.01 backend; external Cast remains independent.",
         "DUAL-WIELD SCOPE",
         "does not merge two different weapon",
     )
@@ -197,23 +217,28 @@ def main():
     if not hasattr(cmds, "viewmodelWeaponToolkit"):
         raise RuntimeError("Unloading the legacy loader removed primary commands")
     cmds.unloadPlugin("viewmodel_weapon_toolkit", force=True)
+    if backend.registered:
+        raise RuntimeError("Private translator remained registered after primary unload")
+    _assert_external_cast_loaded(runtime_cast)
 
     cmds.loadPlugin(str(CHINESE), quiet=True)
     _assert_loaded(CHINESE, "viewmodel_weapon_toolkit_zh_CN")
+    if _assert_private_cast_loaded("viewmodel_weapon_toolkit_zh_CN") is not backend:
+        raise RuntimeError("Chinese entry created a second backend")
     chinese_core = sys.modules.get("viewmodel_weapon_toolkit_zh_cn_core")
     if chinese_core is None:
         raise RuntimeError("Chinese shared core module is unavailable")
-    if chinese_core.VERSION != "3.4.3":
+    if chinese_core.VERSION != "3.5.0":
         raise RuntimeError("Chinese core changed the release version")
     translator = chinese_core.cmds._commands
     if translator is not cmds:
         raise RuntimeError("Chinese UI proxy is not attached to maya.cmds")
-    if chinese_core._zh_cn_entry_version != "3.4.3":
+    if chinese_core._zh_cn_entry_version != "3.5.0":
         raise RuntimeError("Chinese entry point changed the release version")
     translate_ui_text = chinese_core._zh_cn_translate_ui_text
     localized_about = translate_ui_text(chinese_core._about_message())
     required_localized_about = (
-        "CoD 视角模型工具包 v3.4.3",
+        "CoD 视角模型工具包 v3.5.0",
         "主要流程",
         "动画与导出",
         "DQS 蒙皮",
@@ -239,8 +264,8 @@ def main():
             "失败：\nexample":
         raise RuntimeError("Chinese error translation is unavailable")
     if translate_ui_text(
-            ".cast/.smd model export uses bundled/compatible Cast v2.00;") != \
-            ".cast/.smd 模型导出使用内置/兼容的 Cast v2.00；":
+            ".cast/.smd model export uses bundled private CAST v2.01;") != \
+            ".cast/.smd 模型导出使用内置私有 CAST v2.01；":
         raise RuntimeError("Chinese bundled CAST text is unavailable")
     fake_commands = _FakeDialogCommands()
     proxy = type(chinese_core.cmds)(fake_commands)
@@ -267,12 +292,17 @@ def main():
     if fake_commands.keywords["caption"] != "选择 .cast 文件":
         raise RuntimeError("Localized file dialog caption is incorrect")
     cmds.unloadPlugin("viewmodel_weapon_toolkit_zh_CN", force=True)
+    if backend.registered:
+        raise RuntimeError("Private translator remained registered after Chinese unload")
+    _assert_external_cast_loaded(runtime_cast)
     if hasattr(cmds, "viewmodelWeaponToolkit"):
         raise RuntimeError("Chinese command survived plugin unload")
 
     cmds.loadPlugin(str(LEGACY), quiet=True)
     _assert_loaded(LEGACY, "attach_gun")
     _assert_loaded(PRIMARY, "viewmodel_weapon_toolkit")
+    if _assert_private_cast_loaded("viewmodel_weapon_toolkit") is not backend:
+        raise RuntimeError("Legacy entry created a second backend")
     cmds.unloadPlugin("attach_gun", force=True)
     if not hasattr(cmds, "viewmodelWeaponToolkit"):
         raise RuntimeError("Primary command did not survive legacy unload")

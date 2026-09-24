@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 
 import maya.cmds as cmds
+from verify_vendored_cast import CAST_MODULE_SHA256, CAST_PLUGIN_SHA256
 
 if not hasattr(cmds, "pluginInfo"):
     import maya.standalone
@@ -13,8 +14,8 @@ if not hasattr(cmds, "pluginInfo"):
 
 
 CAST_HASHES = {
-    "cast.py": "d1ff7fcb2a184f208b21be34485d1863834ae33811078a28a2ccf6ff61f2c577",
-    "castplugin.py": "08fd46b21c152eb6ef1aa01d1d4d23ad690134608e4c26853a75c224743fcd22",
+    "cast.py": CAST_MODULE_SHA256,
+    "castplugin.py": CAST_PLUGIN_SHA256,
 }
 
 
@@ -26,7 +27,11 @@ def same_path(left, right):
 def main(package, edition):
     package = Path(package).resolve()
     plugin_dir = package / "plug-ins"
+    cast_dir = plugin_dir / "cod_viewmodel_cast"
     assert (plugin_dir / "cod_viewmodel_units.py").is_file()
+    assert (plugin_dir / "cod_viewmodel_cast_backend.py").is_file()
+    assert not (plugin_dir / "cast.py").exists()
+    assert not (plugin_dir / "castplugin.py").exists()
     assert (package / "docs/OUTPUT_UNITS.md").is_file()
     expected = {
         "CHANGELOG.md", "LICENSE", "README.md", "README.zh-CN.md",
@@ -38,7 +43,7 @@ def main(package, edition):
     assert not list(package.rglob("__pycache__"))
     assert not list(package.rglob("*.pyc"))
     for name, expected_hash in CAST_HASHES.items():
-        actual = hashlib.sha256((plugin_dir / name).read_bytes()).hexdigest()
+        actual = hashlib.sha256((cast_dir / name).read_bytes()).hexdigest()
         assert actual == expected_hash, (name, actual)
     core_source = (plugin_dir / "viewmodel_weapon_toolkit.py").read_text(
         encoding="utf-8")
@@ -50,20 +55,22 @@ def main(package, edition):
                           if edition == "zh-CN" else "viewmodel_weapon_toolkit.py")
     plugin_name = entry.stem
     cmds.loadPlugin(str(entry), quiet=True)
-    assert str(cmds.pluginInfo(plugin_name, query=True, version=True)) == "3.4.3"
+    assert str(cmds.pluginInfo(plugin_name, query=True, version=True)) == "3.5.0"
     assert hasattr(cmds, "viewmodelWeaponToolkit") and hasattr(cmds, "attachGun")
-    # In Maya Batch the toolkit owns the fallback translator registration;
-    # castplugin.py is loaded as the adjacent implementation module.
+    # GUI and batch share the same private translator and serializer package.
     import sys
-    cast_module = sys.modules.get("castplugin")
+    cast_module = sys.modules.get("_cod_viewmodel_cast.castplugin")
     assert cast_module is not None
     assert same_path(getattr(cast_module, "__file__", ""),
-                     plugin_dir / "castplugin.py"), getattr(cast_module, "__file__", "")
-    assert str(getattr(cast_module, "version", "")) == "2.00"
+                     cast_dir / "castplugin.py"), getattr(cast_module, "__file__", "")
+    assert str(getattr(cast_module, "version", "")) == "2.01"
+    serializer = sys.modules.get("_cod_viewmodel_cast.cast")
+    assert serializer is not None and cast_module.Cast is serializer.Cast
+    assert same_path(serializer.__file__, cast_dir / "cast.py")
     translators = cmds.pluginInfo(plugin_name, query=True, translator=True) or []
     if isinstance(translators, str):
         translators = [translators]
-    assert any(str(name).lower() == "cast" for name in translators), translators
+    assert translators == ["CoDToolkitCast"], translators
     if edition == "zh-CN":
         localized_core = sys.modules.get("viewmodel_weapon_toolkit_zh_cn_core")
         assert localized_core is not None

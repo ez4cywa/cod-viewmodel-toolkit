@@ -14,7 +14,10 @@ import maya.OpenMayaAnim as OpenMayaAnim
 import maya.OpenMayaMPx as OpenMayaMPx
 
 
-from cast import Cast, CastColor, Model, Animation, Instance, Metadata, File, Color
+if globals().get("__package__"):
+    from .cast import Cast, CastColor, Model, Animation, Instance, Metadata, File, Color
+else:
+    from cast import Cast, CastColor, Model, Animation, Instance, Metadata, File, Color
 
 # Minimum weight value to be considered.
 WEIGHT_THRESHOLD = 0.000001
@@ -61,7 +64,93 @@ runtimeSettings = {
 }
 
 # Shared version number
-version = "2.00"
+version = "2.01"
+fileTranslatorName = "Cast"
+
+# Only standalone plugin registration opts into persistent user preferences.
+# A privately imported backend is controlled exclusively by operation options.
+_settingsPath = None
+_animationState = None
+
+
+@contextmanager
+def utilityOperationOptions(options=None, runtime=None):
+    """Apply one operation's settings without reading or writing cast.cfg."""
+    options = dict(options or {})
+    runtime = dict(runtime or {})
+    unknown = (set(options) - set(sceneSettings)) | (set(runtime) - set(runtimeSettings))
+    if unknown:
+        raise ValueError("Unknown CAST options: %s" % ", ".join(sorted(unknown)))
+    previous = dict(sceneSettings)
+    previousRuntime = dict(runtimeSettings)
+    sceneSettings.update(options)
+    runtimeSettings.update(runtime)
+    try:
+        yield
+    finally:
+        sceneSettings.clear()
+        sceneSettings.update(previous)
+        runtimeSettings.clear()
+        runtimeSettings.update(previousRuntime)
+
+
+@contextmanager
+def utilityAnimationTargets(targets=None):
+    """Route CAST names to full Maya DAG paths, or None to explicitly skip.
+
+    Missing keys retain normal name lookup. Targets and lookup caches are local
+    to this operation; callers must not rename/reparent nodes during import.
+    Nested contexts replace their parent's mapping and restore it on exit.
+    """
+    global _animationState
+    normalized = {}
+    for name, target in dict(targets or {}).items():
+        name = utilitySanitize(name)
+        if target is not None and (not isinstance(target, str) or not target.startswith("|")):
+            raise ValueError("CAST animation target must be a full DAG path or None: %s" % name)
+        if name in normalized and normalized[name] != target:
+            raise ValueError("Conflicting CAST animation target: %s" % name)
+        normalized[name] = target
+    previous = _animationState
+    _animationState = {"targets": normalized, "nodes": {}, "curves": {},
+                       "parents": {}, "blendShapes": None}
+    try:
+        yield
+    finally:
+        _animationState = previous
+
+
+def utilityResolveAnimationTarget(name):
+    if _animationState is None:
+        return name
+    return _animationState["targets"].get(name, name)
+
+
+def utilityAnimationNodeData(name):
+    """Resolve a node and its immutable rest transform once per animation."""
+    target = utilityResolveAnimationTarget(name)
+    if target is None:
+        return None
+    cache = _animationState["nodes"] if _animationState is not None else {}
+    if target not in cache:
+        if not cmds.objExists(target):
+            cache[target] = None
+        else:
+            try:
+                path = utilityGetDagPath(target)
+            except RuntimeError:
+                cmds.warning("Unable to animate \"%s\" due to a name conflict in the scene" % name)
+                cache[target] = None
+            else:
+                # A missing bone may collide with a mesh/shape name. Preserve
+                # the normal missing-channel skip instead of treating a shape
+                # as a transform or adding rest-pose attributes to it.
+                if not path.node().hasFn(OpenMaya.MFn.kTransform):
+                    cache[target] = None
+                else:
+                    cache[target] = (path, utilitySaveNodeData(path),
+                                     OpenMaya.MFnDependencyNode(path.node()))
+    return cache[target]
 
 # Scoped to a toolkit build; ordinary file imports never retain documents.
 _castReadCache = None
@@ -396,27 +485,18 @@ def utilityGetDagPath(pathName):
 
 def utilityBoneIndex(list, name):
     for i, v in enumerate(list):
-        if v[0] == name:
+        if v[1] == name:
             return i
     return -1
 
 
 def utilityBoneParent(joint):
-    fullPath = joint.fullPathName()
-    splitPath = fullPath[1:].split("|")
-    splitCount = len(splitPath)
-
-    if splitCount > 2:
-        dagPath = utilityGetDagPath("|".join(splitPath[0:len(splitPath) - 2]))
-    elif splitCount == 2:
-        dagPath = utilityGetDagPath(fullPath[0:fullPath.find("|", 1)])
-    else:
-        dagPath = None
-
-    if dagPath and dagPath.hasFn(OpenMaya.MFn.kJoint):
-        return splitPath[len(splitPath) - 2]
-
-    return None
+    if joint.parentCount() == 0:
+        return None
+    parent = joint.parent(0)
+    if not parent.hasFn(OpenMaya.MFn.kJoint):
+        return None
+    return OpenMaya.MFnDagNode(parent).fullPathName()
 
 
 def utilityFramerateToUnit(framerate):
@@ -533,15 +613,17 @@ def utilityResolveCurveModeOverride(name, mode, overrides, isTranslate=False, is
         return mode
 
     try:
-        parentTree = cmds.ls(name, long=True)[0].split('|')[1:-1]
-
-        if not parentTree:
+        data = utilityAnimationNodeData(name)
+        if data is None:
             return mode
-
-        for parentName in parentTree:
-            if parentName.find(":") >= -1:
-                parentName = parentName[parentName.find(":") + 1:]
-
+        fullPath = data[0].fullPathName()
+        cache = _animationState["parents"] if _animationState is not None else {}
+        if fullPath not in cache:
+            parts = fullPath.split('|')[1:-1]
+            cache[fullPath] = [("|" + "|".join(parts[:i + 1]),
+                                part.rsplit(":", 1)[-1])
+                               for i, part in enumerate(parts)]
+        for parentPath, parentName in cache[fullPath]:
             for override in overrides:
                 if isTranslate and not override.OverrideTranslationCurves():
                     continue
@@ -550,7 +632,11 @@ def utilityResolveCurveModeOverride(name, mode, overrides, isTranslate=False, is
                 elif isScale and not override.OverrideScaleCurves():
                     continue
 
-            if parentName == utilitySanitize(override.NodeName()):
+                overrideName = utilitySanitize(override.NodeName())
+                targets = _animationState["targets"] if _animationState is not None else {}
+                matches = (targets[overrideName] == parentPath
+                           if overrideName in targets else overrideName == parentName)
+                if matches:
                     return override.Mode()
 
         return mode
@@ -567,14 +653,11 @@ def utilityQueryToggleItem(name):
 
 
 def utilityLoadSettings():
-    currentPath = os.path.dirname(
-        os.path.realpath(cmds.pluginInfo("castplugin",
-                                         q=True,
-                                         p=True)))
-    settingsPath = os.path.join(currentPath, "cast.cfg")
+    if _settingsPath is None:
+        return
 
     try:
-        with open(settingsPath, "r") as file:
+        with open(_settingsPath, "r") as file:
             diskSettings = json.loads(file.read())
     except:
         diskSettings = {}
@@ -587,14 +670,11 @@ def utilityLoadSettings():
 
 
 def utilitySaveSettings():
-    currentPath = os.path.dirname(
-        os.path.realpath(cmds.pluginInfo("castplugin",
-                                         q=True,
-                                         p=True)))
-    settingsPath = os.path.join(currentPath, "cast.cfg")
+    if _settingsPath is None:
+        return
 
     try:
-        with open(settingsPath, "w") as file:
+        with open(_settingsPath, "w") as file:
             file.write(json.dumps(sceneSettings))
     except:
         pass
@@ -1211,20 +1291,23 @@ def utilitySaveNodeData(dagPath):
 
 
 def utilityGetOrCreateCurve(name, property, curveType):
-    if not cmds.objExists("%s.%s" % (name, property)):
+    target = utilityResolveAnimationTarget(name)
+    if target is None:
         return None
-
-    try:
-        nodePath = utilityGetDagPath(name)
-    except RuntimeError:
-        cmds.warning("Unable to animate \"%s.%s\" due to a name conflict in the scene" % (name,
-                                                                                          property))
+    cache = _animationState["curves"] if _animationState is not None else {}
+    key = (target, property)
+    if key in cache:
+        result = cache[key]
+        if result is not None and property in ["rx", "ry", "rz"]:
+            if utilityGetCurveInterpolation(result[0].name()) != "none":
+                utilitySetCurveInterpolation(result[0].name())
+        return result
+    data = utilityAnimationNodeData(name)
+    if data is None or not data[2].hasAttribute(property):
+        cache[key] = None
         return None
-
-    restTransform = utilitySaveNodeData(nodePath)
-
-    propertyPlug = \
-        OpenMaya.MFnDependencyNode(nodePath.node()).findPlug(property, False)
+    nodePath, restTransform, dependency = data
+    propertyPlug = dependency.findPlug(property, False)
     propertyPlug.setKeyable(True)
     propertyPlug.setLocked(False)
 
@@ -1236,7 +1319,8 @@ def utilityGetOrCreateCurve(name, property, curveType):
         # make a new one on top of the property
         newCurve = OpenMayaAnim.MFnAnimCurve()
         newCurve.create(propertyPlug, curveType)
-        return (newCurve, restTransform)
+        cache[key] = (newCurve, restTransform)
+        return cache[key]
     elif inputSources[0].node().hasFn(OpenMaya.MFn.kAnimCurve):
         # There is an existing curve on this node, we need to
         # grab the curve, but then reset the rotation interpolation
@@ -1248,8 +1332,9 @@ def utilityGetOrCreateCurve(name, property, curveType):
             utilitySetCurveInterpolation(newCurve.name())
 
         # Return the existing curve
-        return (newCurve, restTransform)
-
+        cache[key] = (newCurve, restTransform)
+        return cache[key]
+    cache[key] = None
     return None
 
 
@@ -1366,8 +1451,19 @@ def utilityImportBlendShapeTrackData(shapeName, timeUnit, frameStart, frameBuffe
 
     deformers = []
 
-    # Grab all of the deformer nodes so we can determine if they have this shape key.
-    for deformer in cmds.ls(type="blendShape"):
+    target = utilityResolveAnimationTarget(shapeName)
+    if target is None:
+        return (smallestFrame, largestFrame)
+    if _animationState is not None and shapeName in _animationState["targets"]:
+        # A mapped blend-shape alias is restricted to the target mesh's history.
+        candidates = cmds.ls(cmds.listHistory(target) or [], type="blendShape") or []
+    elif _animationState is not None:
+        if _animationState["blendShapes"] is None:
+            _animationState["blendShapes"] = cmds.ls(type="blendShape") or []
+        candidates = _animationState["blendShapes"]
+    else:
+        candidates = cmds.ls(type="blendShape") or []
+    for deformer in candidates:
         if cmds.objExists("%s.%s" % (deformer, shapeName)):
             cmds.setAttr("%s.%s" % (deformer, shapeName), 0)
             deformers.append(deformer)
@@ -2409,6 +2505,10 @@ def importCurveNode(node, path, timeUnit, startFrame, overrides):
     keyFrameBuffer = node.KeyFrameBuffer()
     keyValueBuffer = node.KeyValueBuffer()
 
+    # An explicit skip must not fall back to an identically named scene node.
+    if utilityResolveAnimationTarget(nodeName) is None:
+        return (OpenMaya.MTime(sys.maxsize, timeUnit), OpenMaya.MTime(0, timeUnit))
+
     # Special case for blend shapes because it requires one curve to N deformer(s).
     if propertyName == "bs":
         return utilityImportBlendShapeTrackData(nodeName, timeUnit, startFrame, keyFrameBuffer, keyValueBuffer)
@@ -2486,6 +2586,14 @@ def importNotificationTrackNode(node, timeUnit, frameStart):
 
 
 def importAnimationNode(node, path):
+    # Multiple clips in one read session must not retain scene/API objects or
+    # rest data from the previous clip (which may reset/create curves).
+    targets = _animationState["targets"] if _animationState is not None else {}
+    with utilityAnimationTargets(targets):
+        return _importAnimationNode(node, path)
+
+
+def _importAnimationNode(node, path):
     # We need to be sure to disable auto keyframe, because it breaks import of animations
     # do this now so we don't forget...
     sceneAnimationController = OpenMayaAnim.MAnimControl()
@@ -2528,20 +2636,21 @@ def importAnimationNode(node, path):
 
     progress = utilityCreateProgress("Importing animation...", len(curves))
 
-    for i, x in enumerate(curves):
-        (smallestFrame, largestFrame) = importCurveNode(x,
-                                                        path,
-                                                        wantedFps,
-                                                        startFrame,
-                                                        curveModeOverrides)
+    try:
+        for i, x in enumerate(curves):
+            (smallestFrame, largestFrame) = importCurveNode(x,
+                                                            path,
+                                                            wantedFps,
+                                                            startFrame,
+                                                            curveModeOverrides)
 
-        wantedSmallestFrame = min(smallestFrame, wantedSmallestFrame)
-        wantedLargestFrame = max(largestFrame, wantedLargestFrame)
+            wantedSmallestFrame = min(smallestFrame, wantedSmallestFrame)
+            wantedLargestFrame = max(largestFrame, wantedLargestFrame)
 
-        utilityStepProgress(progress,
-                            "Importing curve [%d] of [%d]..." % (i + 1, len(curves)))
-
-    utilityEndProgress(progress)
+            utilityStepProgress(progress,
+                                "Importing curve [%d] of [%d]..." % (i + 1, len(curves)))
+    finally:
+        utilityEndProgress(progress)
 
     notifications = node.Notifications()
 
@@ -2619,7 +2728,7 @@ def importInstanceNodes(nodes, path, sceneRoot):
     for instancePath, instances in uniqueInstances.items():
         try:
             imported = cmds.file(instancePath, i=True,
-                                 type="Cast", returnNewNodes=True)
+                                 type=fileTranslatorName, returnNewNodes=True)
         except RuntimeError:
             cmds.warning(
                 "Instance: %s failed to import or not found, skipping..." % instancePath)
@@ -2888,7 +2997,7 @@ def exportModel(root, exportSelected, filePath):
         if jointName in uniqueBones:
             continue
 
-        parentStack.append((jointName, utilityBoneParent(joint)))
+        parentStack.append((jointName, jointPathName, utilityBoneParent(joint)))
 
         worldPosition = joint.getTranslation(OpenMaya.MSpace.kWorld)
         localPosition = joint.getTranslation(OpenMaya.MSpace.kTransform)
@@ -2933,7 +3042,7 @@ def exportModel(root, exportSelected, filePath):
             # Index in the final bone array.
             0]
 
-    for (boneName, boneParent) in parentStack:
+    for (boneName, _, boneParent) in parentStack:
         if boneParent:
             uniqueBones[boneName][0] = \
                 utilityBoneIndex(parentStack, boneParent)
@@ -2941,7 +3050,7 @@ def exportModel(root, exportSelected, filePath):
     if parentStack:
         skeleton = model.CreateSkeleton()
 
-        for (boneName, _) in parentStack:
+        for (boneName, _, _) in parentStack:
             joint = uniqueBones[boneName]
             joint[7] = uniqueBoneIndex
 
@@ -3295,13 +3404,16 @@ def createCastTranslator():
 
 
 def initializePlugin(m_object):
+    global _settingsPath
     m_plugin = OpenMayaMPx.MFnPlugin(m_object, "DTZxPorter", version, "Any")
 
     try:
-        m_plugin.registerFileTranslator("Cast", None, createCastTranslator)
+        m_plugin.registerFileTranslator(fileTranslatorName, None, createCastTranslator)
     except RuntimeError:
         pass
 
+    pluginPath = cmds.pluginInfo(m_plugin.name(), query=True, path=True)
+    _settingsPath = os.path.join(os.path.dirname(os.path.realpath(pluginPath)), "cast.cfg")
     utilityLoadSettings()
     if not cmds.about(batch=True):
         utilityCreateMenu()
@@ -3311,7 +3423,7 @@ def uninitializePlugin(m_object):
     m_plugin = OpenMayaMPx.MFnPlugin(m_object)
 
     try:
-        m_plugin.deregisterFileTranslator("Cast")
+        m_plugin.deregisterFileTranslator(fileTranslatorName)
     except RuntimeError:
         pass
 

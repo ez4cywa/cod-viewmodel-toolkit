@@ -1,4 +1,4 @@
-"""Simplified Chinese entry point for CoD Viewmodel Toolkit 3.4.3.
+"""Simplified Chinese entry point for CoD Viewmodel Toolkit 3.5.0.
 
 This file reuses the English implementation beside it and localizes Maya UI
 text at the command boundary. Technical identifiers, joint names, file
@@ -17,7 +17,7 @@ import sys
 import maya.cmds as _maya_cmds
 
 
-VERSION = "3.4.3"
+VERSION = "3.5.0"
 _LOADER_FILE = globals().get("__file__") or sys._getframe().f_code.co_filename
 _CORE_PATH = os.path.join(
     os.path.dirname(os.path.abspath(_LOADER_FILE)),
@@ -158,13 +158,11 @@ _PHRASE_TRANSLATIONS = (
      "  JSON 报告记录每项结果。"),
     ("COMPATIBILITY", "兼容性"),
     ("- Expected: Maya 2022+ in Python 3 mode.\n"
-     "  Verified: Maya 2025 for Windows.",
+     "  Verified: Maya 2027 for Windows.",
      "- 预期兼容 Maya 2022+ 的 Python 3 模式；\n"
-     "  已在 Windows 版 Maya 2025 验证。"),
-    ("- Uses an already loaded compatible Cast translator, or the adjacent\n"
-     "  patched CAST 2.00 fallback.",
-     "- 优先使用已加载的兼容 Cast 转换器；\n"
-     "  否则回退到相邻的补丁版 CAST 2.00。"),
+     "  已在 Windows 版 Maya 2027 验证。"),
+    ("- Bundled private CAST 2.01 backend; external Cast remains independent.",
+     "- 固定使用内置私有 CAST 2.01 后端；独立安装的 Cast 不受影响。"),
     ("DUAL-WIELD SCOPE", "双持范围"),
     ("- Duplicates the same weapon; does not merge two different weapon\n"
      "  skeletons.",
@@ -276,8 +274,8 @@ _PHRASE_TRANSLATIONS = (
     ("select at least one", "至少选择一种格式"),
     ("blank folder uses Manifest/default", "目录留空时使用清单/默认目录"),
     ("Cast/SMD/FBX are static model outputs", "Cast/SMD/FBX 为静态模型输出"),
-    (".cast/.smd model export uses bundled/compatible Cast v2.00;",
-     ".cast/.smd 模型导出使用内置/兼容的 Cast v2.00；"),
+    (".cast/.smd model export uses bundled private CAST v2.01;",
+     ".cast/.smd 模型导出使用内置私有 CAST v2.01；"),
     (".fbx excludes animation.", ".fbx 不包含动画。"),
     ("Use saved settings and pick one weapon file.",
      "使用已保存设置并选择一个武器文件。"),

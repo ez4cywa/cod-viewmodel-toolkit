@@ -1,25 +1,26 @@
-# Blender — CoD Viewmodel Toolkit 3.4.3
+# Blender — CoD Viewmodel Toolkit 3.5.0
 
 ## 简体中文安装包
 
-3.4.3 提供 `cod-viewmodel-toolkit-3.4.3-blender-zh-CN.zip`；Blender 功能与 3.4.0
-保持一致，本次补丁修复 Maya 动画导入。中文包翻译插件面板、
+3.5.0 提供 `cod-viewmodel-toolkit-3.5.0-blender-zh-CN.zip`。本版集成改进针对 Maya；
+Blender 保留项目补丁版 CAST 2.00 后端及原有导入／导出算法，仅同步安装包版本，
+没有新增 Blender 功能。中文包翻译插件面板、
 按钮、字段、工具提示和常用操作反馈，不修改 Blender 全局语言。侧栏标签仍为
 `Viewmodel`，面板标题为“CoD 视角模型工具包”。底层导入器异常和 JSON 技术字段
 保留英文，便于查错；文件名、骨骼名和动画数据不翻译。
 
 中英文包共用 `cod_viewmodel_toolkit` 模块。切换版本前先停止批处理、禁用旧版，
 通过“从磁盘安装”安装所需语言包并重新启用；不要将两份包改名后同时加载。
-中文包包含与英文 3.4.3 相同的米制输出功能。
+中文包包含与英文 3.5.0 相同的米制输出功能。
 
 [English](BLENDER.md) · [项目首页](../README.zh-CN.md)
 
-要求 Blender 5.2+，已在 Windows 官方 Blender 5.2.1 LTS 中验证。可选中英文侧栏，
+要求 Blender 5.2+，旧版已在 Windows 官方 Blender 5.2.1 LTS 中验证。可选中英文侧栏，
 不依赖 Maya。发布包不包含游戏素材、Blender 程序或 Maya 运行环境。
 
 ## 安装与使用
 
-1. 下载 `cod-viewmodel-toolkit-3.4.3-blender-zh-CN.zip`（中文）或 `cod-viewmodel-toolkit-3.4.3-blender-en.zip`（英文）。
+1. 下载 `cod-viewmodel-toolkit-3.5.0-blender-zh-CN.zip`（中文）或 `cod-viewmodel-toolkit-3.5.0-blender-en.zip`（英文）。
 2. 在 Blender 的 Edit > Preferences > Add-ons 菜单选择 Install from Disk，
    安装 ZIP，并启用 **CoD Viewmodel Toolkit**。
 3. 在 3D 视图按 `N`，打开 **Viewmodel** 标签。

@@ -27,7 +27,7 @@
 | 一次导出多个动画 | 单片段或左右配对加入队列，独立选择格式与目录，生成逐项 JSON 报告。 |
 | 输出米制资产 | 可按输入为英尺换算输出副本，保留源文件和当前工作组装。 |
 
-两个平台分别内置项目补丁版 [CAST 2.00](https://github.com/dtzxporter/cast/releases/tag/v2.00) 后端，Blender 版不依赖 Maya。模型、动画和贴图由用户提供，安装包不包含游戏资产或宿主软件。
+Maya 内置私有的项目补丁版 [CAST 2.01](https://github.com/dtzxporter/cast/releases/tag/v2.01) 后端；Blender 保留项目补丁版 CAST 2.00，不依赖 Maya。模型、动画和贴图由用户提供，安装包不包含游戏资产或宿主软件。
 
 ```mermaid
 flowchart LR
@@ -43,23 +43,25 @@ flowchart LR
 
 ## 下载与安装
 
-当前版本 **3.4.3**：精简网格数据转换，并在单次挂载内复用 CAST 解析结果，进一步加快 Maya 导入。保留模型一致性和错误提示；Blender 功能不变。详见[更新说明](docs/RELEASE_NOTES_3.4.3.md)。
+当前版本 **3.5.0**：Maya 固定使用私有 CAST 2.01 后端，在单次操作内复用动画解析，以明确的 DAG 路径匹配动画目标，不再临时改名关节。合并上游骨架父索引修复，并修正曲线模式覆盖判断。Blender 功能不变。详见[更新说明](docs/RELEASE_NOTES_3.5.0.md)。
 
 | 平台 | 简体中文 ZIP | English ZIP | 运行环境 |
 | --- | --- | --- | --- |
-| Maya | [下载](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/download/3.4.3/cod-viewmodel-toolkit-3.4.3-maya-zh-CN.zip) | [Download](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/download/3.4.3/cod-viewmodel-toolkit-3.4.3-maya-en.zip) | 3.4.3 已验证 Windows Maya 2027；旧版已验证 Maya 2025；目标支持 Maya 2022+ 的 Python 3 模式。 |
-| Blender | [下载](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/download/3.4.3/cod-viewmodel-toolkit-3.4.3-blender-zh-CN.zip) | [Download](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/download/3.4.3/cod-viewmodel-toolkit-3.4.3-blender-en.zip) | 要求 Blender 5.2+；已验证 Windows Blender 5.2.1 LTS。 |
+| Maya | [下载](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/download/3.5.0/cod-viewmodel-toolkit-3.5.0-maya-zh-CN.zip) | [Download](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/download/3.5.0/cod-viewmodel-toolkit-3.5.0-maya-en.zip) | 当前验证环境为 Windows Maya 2027；旧版已验证 Maya 2025；目标支持 Maya 2022+ 的 Python 3 模式。 |
+| Blender | [下载](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/download/3.5.0/cod-viewmodel-toolkit-3.5.0-blender-zh-CN.zip) | [Download](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/download/3.5.0/cod-viewmodel-toolkit-3.5.0-blender-en.zip) | 要求 Blender 5.2+；旧版已验证 Windows Blender 5.2.1 LTS。 |
 
-请选择对应**平台和语言的 ZIP**，不要将 GitHub 自动生成的“Source code”源码包当作安装包。Release 同时提供 [SHA-256 校验文件](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/download/3.4.3/SHA256SUMS.txt)。正常使用由宿主自带 Python 运行，无需另装 Python。
+请选择对应**平台和语言的 ZIP**，不要将 GitHub 自动生成的“Source code”源码包当作安装包。Release 同时提供 [SHA-256 校验文件](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/download/3.5.0/SHA256SUMS.txt)。正常使用由宿主自带 Python 运行，无需另装 Python。
 
 ### Maya
 
 1. 升级前保存工作并关闭 Maya。备份原插件文件，保留个人 `cast.cfg`，不要覆盖。
-2. 解压 ZIP，把 `plug-ins` 中的**全部文件**复制到 `MAYA_PLUG_IN_PATH` 包含的目录。`cod_viewmodel_units.py`、`cast.py`、`castplugin.py` 必须与核心文件放在一起。
+2. 解压 ZIP，把 `plug-ins` 中的**全部文件和子目录**复制到 `MAYA_PLUG_IN_PATH` 包含的目录。`cod_viewmodel_units.py`、`cod_viewmodel_cast_backend.py` 和完整的 `cod_viewmodel_cast` 目录必须与核心文件放在一起。不要覆盖独立安装的 `cast.py`、`castplugin.py` 或 `cast.cfg`。
 3. 打开 Maya 插件管理器。中文版加载 `viewmodel_weapon_toolkit_zh_CN.py`，英文版加载 `viewmodel_weapon_toolkit.py`；只启用一个语言入口。
 4. 从主菜单打开 **CoD 视角模型工具包**／**CoD Viewmodel Toolkit**。
 
 从 Attach Gun 升级时，旧 `attach_gun.py` 入口和 `attachGun` 命令仍兼容；切换入口前请看[安装与兼容说明](docs/MAYA.zh-CN.md#安装)。
+
+工具包注册独立的 `CoDToolkitCast` 转换器。已有外部 CAST 可以保留，其版本和设置不再决定工具包使用的后端。只加载工具包入口，不要单独加载子目录中的 `cod_viewmodel_cast/castplugin.py`。源码仓库可直接加载入口，无需复制 `third_party` 文件。
 
 ### Blender
 
@@ -124,6 +126,8 @@ Maya 动画流程明确设置 DQS，纯静态 Maya 导出不强制转换。已�
 
 **提示部分动画轨道找不到骨骼。** `j_gripsafety` 等额外轨道可能被跳过并产生警告。不代表整段动画导入失败，应结合其余关键帧和结果报告判断。
 
+**3.5.0 改进了什么？** 界面与批处理共用私有后端，设置只在当前操作内生效。实测一次单武器动画拖放的 CAST 解析次数由 4 次降为 1 次；动画通过完整 DAG 路径匹配，查找缓存每段动画结束即释放。解析次数减少不等于固定比例提速，详见[测量记录](docs/CAST_BACKEND_BENCHMARK.md)。挂载规则、输出蒙皮和错误弹窗保持不变，挂载成功仍不弹完成提示。
+
 ## 构建与验证
 
 以下面向开发者，普通安装使用上方 ZIP。在仓库根目录运行：
@@ -134,13 +138,16 @@ cd cod-viewmodel-toolkit
 python tests/verify_vendored_cast.py
 python tests/verify_vendored_blender_cast.py
 mayapy tests/verify_plugin_identity.py
+mayapy tests/verify_private_cast_backend.py
+mayapy tests/verify_cast_v201.py
+mayapy tests/verify_animation_read_session.py
 mayapy tests/verify_maya_drop_module_path.py
 python scripts/build_release.py ../release-output
 ```
 
 `mayapy` 是 Maya 自带的 Python，可用完整路径调用。构建命令生成**四个**平台／语言 ZIP，不覆盖已有压缩包。源码安装方法见 [Maya](docs/MAYA.zh-CN.md#安装)和 [Blender](docs/BLENDER.zh-CN.md) 使用说明。
 
-GitHub Actions 只运行语法、内置后端完整性及生成资产检查，**不运行 Maya 或 Blender**。宿主验证单独记录：[3.4.1 导入修复](docs/VERIFICATION_3.4.1.md)、[米制输出](docs/VERIFICATION_3.4.0.md)、[Maya／Blender](docs/VERIFICATION_3.3.0.md)、[动画批量导出](docs/BATCH_ANIMATION_VERIFICATION.md)。Maya 2022 的兼容性来自 Python 3.7 语法与 API 检查，不代表已在该版本执行完整回归。
+GitHub Actions 只运行语法、内置后端完整性及生成资产检查，**不运行 Maya 或 Blender**。宿主验证单独记录：[3.5.0 后端测量](docs/CAST_BACKEND_BENCHMARK.md)、[3.4.1 导入修复](docs/VERIFICATION_3.4.1.md)、[米制输出](docs/VERIFICATION_3.4.0.md)、[Maya／Blender](docs/VERIFICATION_3.3.0.md)、[动画批量导出](docs/BATCH_ANIMATION_VERIFICATION.md)。Maya 2022 的兼容性来自 Python 3.7 语法与 API 检查，不代表已在该版本执行完整回归。
 
 ## 项目结构
 

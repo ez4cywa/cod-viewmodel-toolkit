@@ -1,11 +1,11 @@
 r"""CoD Viewmodel Toolkit plugin for Maya 2022 and newer.
 
 Python 3 mode is required. The minimum compatibility target is Maya 2022
-with Python 3.7.7; the release is verified on Maya 2025 for Windows.
+with Python 3.7.7; this release is verified on Maya 2027 for Windows.
 
 The plugin imports one viewhands Cast file and one weapon Cast file, then
 parents the weapon's ``j_gun`` under the viewhands' ``tag_weapon`` and zeroes
-the weapon joint's local translation. Animation import temporarily routes the
+the weapon joint's local translation. Animation import explicitly routes the
 viewhands ``j_gun`` tracks around the attached weapon's same-named root.
 Dragging a pure animation Cast file onto Maya uses that same collision-safe
 route automatically; model and unrelated Cast files retain Maya's defaults.
@@ -24,8 +24,7 @@ Output formats and their folders are independently selectable: Maya ASCII
 (``.ma``), combined model Cast (``.cast``), Source model (``.smd``), and FBX
 (``.fbx``). A JSON verification manifest is always written to the common
 output folder. Release packages include a project-patched Maya Cast plugin
-based on official v2.00; a compatible v1.99 or newer translator can also be
-used.
+based on official v2.01, isolated from separately installed CAST plugins.
 
 Single/dual animation queues export selected animated formats with DQS
 skinning. Animated CAST keeps the assembled rest model, and SMD exports
@@ -87,7 +86,7 @@ COMMAND_NAME = "viewmodelWeaponToolkit"
 LEGACY_COMMAND_NAME = "attachGun"
 WINDOW_NAME = "ViewmodelWeaponToolkitWindow"
 DUAL_WINDOW_NAME = "ViewmodelWeaponToolkitDualWindow"
-VERSION = "3.4.3"
+VERSION = "3.5.0"
 
 VIEWHANDS_OPTVAR = "attachGun_viewhandsPath"
 OUTPUT_DIR_OPTVAR = "attachGun_outputDir"
@@ -139,8 +138,7 @@ BATCH_ANIMATION_PROGRESS = "attachGun_batchAnimationProgress"
 BATCH_ANIMATION_STATUS = "attachGun_batchAnimationStatus"
 
 _LAST_RESULT = None
-_CAST_BATCH_MODULE = None
-_CAST_TRANSLATOR_FALLBACK_REGISTERED = False
+_CAST_BACKEND = None
 _CAST_DROP_CALLBACK = None
 _TOOLKIT_PLUGIN_PATH = ""
 _UNITS_MODULE = None
@@ -243,6 +241,7 @@ class AttachResult:
     output_errors: dict = field(default_factory=dict)
     skinning_method: str = ""
     unit_conversion: dict = field(default_factory=dict)
+    cast_backend: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -410,70 +409,25 @@ def _is_plugin_loaded(name):
 
 
 def _toolkit_registered_cast_translator():
-    for plugin_name in (PLUGIN_BASENAME, LEGACY_PLUGIN_BASENAME):
-        try:
-            if not cmds.pluginInfo(plugin_name, query=True, loaded=True):
-                continue
-            translators = cmds.pluginInfo(
-                plugin_name, query=True, translator=True) or []
-            if isinstance(translators, str):
-                translators = [translators]
-            if any(str(name).lower() == "cast" for name in translators):
-                return True
-        except Exception:
-            continue
-    return False
+    backend = _cast_backend()
+    return backend.registered and backend.translator_name in (
+        cmds.translator(query=True, list=True) or [])
 
 
 def ensure_cast_plugin():
-    """Load Maya's bundled Cast translator and retain the original error."""
-    if _CAST_TRANSLATOR_FALLBACK_REGISTERED:
-        return
+    """Select only the toolkit's private translator, regardless of external CAST."""
     if _toolkit_registered_cast_translator():
         return
-    for name in ("castplugin", "castplugin.py"):
-        if _is_plugin_loaded(name):
-            return
-
-    if cmds.about(batch=True):
-        raise RuntimeError(
-            "The official Cast plugin cannot initialize its menu in Maya batch mode. Load "
-            "%s as a Maya plugin so it can register the official "
-            "Cast translator through its batch fallback." % PRODUCT_NAME)
-
-    candidate = _bundled_cast_plugin_path() or "castplugin.py"
+    candidate = _TOOLKIT_PLUGIN_PATH or globals().get("__file__", "")
+    if not candidate:
+        raise RuntimeError("Toolkit plugin path is unavailable; load the toolkit in Plug-in Manager")
     try:
         cmds.loadPlugin(candidate, quiet=True)
     except Exception as exc:
         raise RuntimeError(
-            "Maya's bundled castplugin.py failed to load: %s" % exc) from exc
-
-    if not any(_is_plugin_loaded(name) for name in ("castplugin", "castplugin.py")):
-        raise RuntimeError("castplugin.py loaded without registering as a Maya plugin")
-
-
-def _cast_plugin_path():
-    """Return the actual castplugin.py path registered with this Maya process."""
-    for name in ("castplugin", "castplugin.py"):
-        if not _is_plugin_loaded(name):
-            continue
-        try:
-            path = cmds.pluginInfo(name, query=True, path=True)
-        except Exception:
-            path = ""
-        if path and os.path.isfile(path):
-            return os.path.normpath(os.path.abspath(path))
-
-    bundled = _bundled_cast_plugin_path()
-    if bundled:
-        return bundled
-
-    plugin_dir = os.path.join(
-        os.path.dirname(os.path.abspath(sys.executable)), "plug-ins")
-    path = os.path.join(plugin_dir, "castplugin.py")
-    if os.path.isfile(path):
-        return os.path.normpath(os.path.abspath(path))
-    raise RuntimeError("Maya Cast plugin file not found: %s" % path)
+            "Toolkit CAST backend failed to load: %s" % exc) from exc
+    if not _toolkit_registered_cast_translator():
+        raise RuntimeError("Toolkit loaded without registering its private CAST translator")
 
 
 def _toolkit_module_dir():
@@ -484,152 +438,43 @@ def _toolkit_module_dir():
     return ""
 
 
-def _bundled_cast_plugin_path():
-    """Resolve release-adjacent or source-checkout CAST before Maya's copy."""
-    directory = _toolkit_module_dir()
-    if not directory:
-        return ""
-    for path in (
-            os.path.join(directory, "castplugin.py"),
-            os.path.join(os.path.dirname(directory), "third_party",
-                         "cast", "castplugin.py")):
-        if os.path.isfile(path):
-            return os.path.normpath(os.path.abspath(path))
-    return ""
-
-
-def _load_castplugin_module():
-    """Load Cast Python code from Maya's registered plugin path."""
-    global _CAST_BATCH_MODULE
-
-    plugin_path = _cast_plugin_path()
-    for existing in tuple(sys.modules.values()):
-        existing_path = os.path.abspath(getattr(
-            existing, "__file__", "") or "") if existing is not None else ""
-        if (existing_path and os.path.normcase(existing_path)
-                == os.path.normcase(plugin_path)
-                and hasattr(existing, "sceneSettings")
-                and hasattr(existing, "Cast")):
-            _CAST_BATCH_MODULE = existing
-            return existing
-
-    plugin_dir = os.path.dirname(plugin_path)
-    if not any(
-            os.path.normcase(os.path.abspath(path or os.curdir))
-            == os.path.normcase(plugin_dir)
-            for path in sys.path):
-        sys.path.insert(0, plugin_dir)
-
-    spec = importlib.util.spec_from_file_location("castplugin", plugin_path)
-    if spec is None or spec.loader is None:
-        raise RuntimeError(
-            "Unable to create a Python module spec for: %s" % plugin_path)
-    module = importlib.util.module_from_spec(spec)
-    previous = sys.modules.get("castplugin")
-    sys.modules["castplugin"] = module
-    try:
-        spec.loader.exec_module(module)
-    except Exception:
-        if previous is None:
-            sys.modules.pop("castplugin", None)
-        else:
-            sys.modules["castplugin"] = previous
-        raise
-
-    _CAST_BATCH_MODULE = module
-    return module
-
-
-def _import_cast_module_for_batch():
-    """Import official Cast code for the batch translator fallback."""
-    if _CAST_BATCH_MODULE is not None:
-        return _CAST_BATCH_MODULE
-    return _load_castplugin_module()
-
-
-def _register_batch_cast_translator(plugin):
-    """Register the official Cast reader under this plugin in batch mode."""
-    global _CAST_TRANSLATOR_FALLBACK_REGISTERED
-    module = _import_cast_module_for_batch()
-    # The official plugin expects Maya UI progress controls that do not exist
-    # in batch mode. Keep its importer/exporter implementation and replace only
-    # the visual progress hooks for this headless process.
-    module.utilityCreateProgress = lambda status="", maximum=0: None
-    module.utilityStepProgress = lambda instance, status="": None
-    module.utilityEndProgress = lambda instance: None
-    module.utilityCreateMenu = lambda *args, **kwargs: None
-    module.utilityRemoveMenu = lambda *args, **kwargs: None
-    # A failed official batch initialization can leave a translator registered
-    # even though pluginInfo reports the plugin as unloaded. Remove that stale
-    # reader so Maya selects this patched official-module registration.
-    try:
-        plugin.deregisterFileTranslator("Cast")
-    except RuntimeError:
-        pass
-    plugin.registerFileTranslator("Cast", None, module.createCastTranslator)
-    _CAST_TRANSLATOR_FALLBACK_REGISTERED = True
-    log("registered official Cast translator through batch fallback")
+def _cast_backend():
+    """Share one private backend across Python imports and Maya's entry points."""
+    global _CAST_BACKEND
+    if _CAST_BACKEND is None:
+        directory = _toolkit_module_dir()
+        path = os.path.join(directory, "cod_viewmodel_cast_backend.py")
+        name = "_cod_viewmodel_cast_loader"
+        loader = sys.modules.get(name)
+        if loader is None:
+            spec = importlib.util.spec_from_file_location(name, path)
+            if spec is None or spec.loader is None:
+                raise RuntimeError("Unable to load toolkit CAST backend: %s" % path)
+            loader = importlib.util.module_from_spec(spec)
+            sys.modules[name] = loader
+            try:
+                spec.loader.exec_module(loader)
+            except Exception:
+                sys.modules.pop(name, None)
+                raise
+        _CAST_BACKEND = loader.get_backend(
+            _TOOLKIT_PLUGIN_PATH or globals().get("__file__", ""))
+    return _CAST_BACKEND
 
 
 def _castplugin_module():
     ensure_cast_plugin()
-    return _load_castplugin_module()
-
-
-def _loaded_castplugin_modules():
-    """Return every loaded Python module instance for the active translator."""
-    ensure_cast_plugin()
-    plugin_path = _cast_plugin_path()
-    modules = []
-    seen = set()
-    for module in tuple(sys.modules.values()):
-        module_path = os.path.abspath(getattr(
-            module, "__file__", "") or "") if module is not None else ""
-        if (not module_path or os.path.normcase(module_path)
-                != os.path.normcase(plugin_path)):
-            continue
-        if not isinstance(getattr(module, "sceneSettings", None), dict):
-            continue
-        identity = id(module)
-        if identity not in seen:
-            seen.add(identity)
-            modules.append(module)
-    primary = _load_castplugin_module()
-    if id(primary) not in seen:
-        modules.append(primary)
-    return modules
+    return _cast_backend().module
 
 
 def cast_translator_name():
-    """Return the exact translator name registered by the loaded plugin."""
+    """Return the explicitly selected private translator, never external CAST."""
     ensure_cast_plugin()
-    for plugin_name in ("castplugin", "castplugin.py"):
-        try:
-            translators = cmds.pluginInfo(
-                plugin_name, query=True, translator=True) or []
-        except Exception:
-            continue
-        if isinstance(translators, str):
-            translators = [translators]
-        for translator in translators:
-            if str(translator).lower() == "cast":
-                return str(translator)
-    return "Cast"
+    return _cast_backend().translator_name
 
 
 def cast_plugin_version():
-    if _CAST_BATCH_MODULE is not None:
-        return str(getattr(_CAST_BATCH_MODULE, "version", "unknown"))
-    module = sys.modules.get("castplugin")
-    if module is not None and hasattr(module, "version"):
-        return str(module.version)
-    for plugin_name in ("castplugin", "castplugin.py"):
-        try:
-            if _is_plugin_loaded(plugin_name):
-                return str(cmds.pluginInfo(plugin_name, query=True, version=True))
-        except Exception:
-            pass
-    return "unknown"
+    return str(_cast_backend().module.version)
 
 
 def _short_name(name):
@@ -644,20 +489,16 @@ def _cast_import_name(module, name):
 
 @contextmanager
 def _cast_read_session():
-    """Reuse read-only documents only for this build, including nested builds."""
-    module = _castplugin_module()
-    session = getattr(module, "utilityCastReadSession", None)
-    if session is None:
-        yield  # Keep compatibility with separately installed upstream translators.
-    else:
-        with session():
-            yield
+    """Reuse read-only documents within one operation, including nested calls."""
+    ensure_cast_plugin()
+    with _cast_backend().read_session():
+        yield
 
 
 def _cast_bone_inventory(path):
     """Read skeleton and mesh health with cast.py; do not modify the scene."""
     module = _castplugin_module()
-    cast_file = getattr(module, "utilityLoadCast", module.Cast.load)(path)
+    cast_file = _cast_backend().read(path)
     bone_names = []
     bone_records = []
     imported_name_sources = {}
@@ -786,7 +627,7 @@ def _cast_bone_inventory(path):
 def _set_scene_framerate_from_animation(path):
     """Set Maya's time unit before file import can rescale Cast keyframes."""
     module = _castplugin_module()
-    cast_file = module.Cast.load(path)
+    cast_file = _cast_backend().read(path)
     animations = []
     for root in cast_file.Roots():
         animations.extend(root.ChildrenOfType(module.Animation))
@@ -864,7 +705,7 @@ def preflight_inputs(viewhands_path, weapon_path,
 def _cast_animation_inventory(path, allow_models=False):
     """Read animation tracks without changing the Maya scene."""
     module = _castplugin_module()
-    cast_file = module.Cast.load(path)
+    cast_file = _cast_backend().read(path)
     animations = []
     model_count = 0
     for root in cast_file.Roots():
@@ -1687,23 +1528,9 @@ def _try_registered_smd_export(path, source_joint, target_joint):
 @contextmanager
 def _temporary_cast_settings(requested, required=False):
     """Scope translator preferences to one operation, including failure paths."""
-    settings_sets = [
-        module.sceneSettings for module in _loaded_castplugin_modules()
-        if isinstance(getattr(module, "sceneSettings", None), dict)
-    ]
-    if required and not settings_sets:
-        raise RuntimeError("Cast plugin sceneSettings are unavailable")
-    originals = []
-    try:
-        for settings in settings_sets:
-            original = {name: settings[name] for name in requested
-                        if name in settings}
-            originals.append((settings, original))
-            settings.update({name: requested[name] for name in original})
+    ensure_cast_plugin()
+    with _cast_backend().options(requested):
         yield
-    finally:
-        for settings, original in reversed(originals):
-            settings.update(original)
 
 
 def _temporary_cast_import_settings(options):
@@ -1813,16 +1640,6 @@ def _node_from_uuid(node_uuid):
     raise RuntimeError("Node disappeared (UUID %s)" % node_uuid)
 
 
-def _unique_scene_leaf(base):
-    """Return a root-namespace leaf name that is unused in the scene."""
-    candidate = base
-    index = 1
-    while cmds.ls(candidate, long=True):
-        candidate = "%s%d" % (base, index)
-        index += 1
-    return candidate
-
-
 def _resolve_viewhands_animation_joint(
         source_joint, source_uuid, target_uuid):
     """Find the renamed viewhands joint that owns source_joint animation."""
@@ -1853,40 +1670,12 @@ def _resolve_viewhands_animation_joint(
 
 @contextmanager
 def _route_viewhands_animation_name(source_uuid, hand_uuid, source_joint):
-    """Make the viewhands marker the sole source_joint during Cast import."""
-    source_node = _node_from_uuid(source_uuid)
+    """Route the CAST marker explicitly without renaming either skeleton."""
     hand_node = _node_from_uuid(hand_uuid)
-    source_leaf = source_node.split("|")[-1]
-    hand_leaf = hand_node.split("|")[-1]
-    temporary_leaf = _unique_scene_leaf(
-        "__attach_weapon_%s__" % source_joint)
-
-    cmds.rename(source_node, temporary_leaf)
-    try:
-        hand_node = _node_from_uuid(hand_uuid)
-        cmds.rename(hand_node, source_joint)
-        renamed_hand = _node_from_uuid(hand_uuid)
-        if _short_name(renamed_hand) != source_joint:
-            raise RuntimeError(
-                "Unable to expose the viewhands animation joint as %s: %s"
-                % (source_joint, renamed_hand))
-        yield renamed_hand
-    finally:
-        restore_errors = []
-        try:
-            hand_node = _node_from_uuid(hand_uuid)
-            cmds.rename(hand_node, hand_leaf)
-        except Exception as exc:
-            restore_errors.append("viewhands joint: %s" % exc)
-        try:
-            source_node = _node_from_uuid(source_uuid)
-            cmds.rename(source_node, source_leaf)
-        except Exception as exc:
-            restore_errors.append("weapon joint: %s" % exc)
-        if restore_errors:
-            raise RuntimeError(
-                "Failed to restore animation routing names (%s)"
-                % "; ".join(restore_errors))
+    if source_uuid == hand_uuid:
+        raise RuntimeError("Animation marker must differ from the attached weapon root")
+    with _castplugin_module().utilityAnimationTargets({source_joint: hand_node}):
+        yield hand_node
 
 
 def _resolve_unique_joint(imported_nodes, short_name, label):
@@ -1981,14 +1770,9 @@ def _prefix_imported_joints(imported_nodes, prefix):
     return joint_map
 
 
-def _rename_uuid(node_uuid, leaf_name):
-    cmds.rename(_node_from_uuid(node_uuid), leaf_name)
-    return _node_from_uuid(node_uuid)
-
-
 @contextmanager
 def _route_dual_animation_names(state, side, selected_hand_names):
-    """Expose only one hand branch and one weapon copy to the Cast importer."""
+    """Map one hand branch and weapon copy without changing persistent names."""
     if side not in DUAL_SIDES:
         raise RuntimeError("Dual animation side must be left or right")
     hands = state["hands_joint_uuids"]
@@ -1996,69 +1780,35 @@ def _route_dual_animation_names(state, side, selected_hand_names):
     source_joint = state["source_joint"]
     persistent_prefix = state["%s_prefix" % side]
     selected_hand_names = set(selected_hand_names)
-    restore = []
-
-    def rename_temporarily(node_uuid, new_leaf):
-        old_leaf = _node_from_uuid(node_uuid).split("|")[-1]
-        _rename_uuid(node_uuid, new_leaf)
-        restore.append((node_uuid, old_leaf))
-
-    try:
-        for index, (name, node_uuid) in enumerate(sorted(hands.items())):
-            if name in selected_hand_names:
-                continue
-            temporary = _unique_scene_leaf(
-                "__attach_skip_%s_%03d_%s__" % (side, index, name))
-            rename_temporarily(node_uuid, temporary)
-
-        if source_joint in selected_hand_names:
-            hand_uuid = hands.get(source_joint)
-            if not hand_uuid:
-                raise RuntimeError(
-                    "Viewhands animation marker is missing: %s" % source_joint)
-            rename_temporarily(hand_uuid, source_joint)
-
-        for original_name, node_uuid in sorted(weapon.items()):
-            if original_name == source_joint:
-                continue
-            expected = persistent_prefix + original_name
-            if _short_name(_node_from_uuid(node_uuid)) != expected:
-                raise RuntimeError(
-                    "Dual weapon joint name changed before import: %s"
-                    % _node_from_uuid(node_uuid))
-            rename_temporarily(node_uuid, original_name)
+    targets = {
+        name: _node_from_uuid(node_uuid) if name in selected_hand_names else None
+        for name, node_uuid in hands.items()
+    }
+    if source_joint in selected_hand_names and not hands.get(source_joint):
+        raise RuntimeError("Viewhands animation marker is missing: %s" % source_joint)
+    # Missing/disabled hands markers must not fall through to a weapon root.
+    targets.setdefault(source_joint, None)
+    for original_name, node_uuid in weapon.items():
+        if original_name == source_joint:
+            continue
+        node = _node_from_uuid(node_uuid)
+        if _short_name(node) != persistent_prefix + original_name:
+            raise RuntimeError("Dual weapon joint name changed before import: %s" % node)
+        targets[original_name] = node
+    with _castplugin_module().utilityAnimationTargets(targets):
         yield
-    finally:
-        restore_errors = []
-        for node_uuid, old_leaf in reversed(restore):
-            try:
-                _rename_uuid(node_uuid, old_leaf)
-            except Exception as exc:
-                restore_errors.append("%s: %s" % (old_leaf, exc))
-        if restore_errors:
-            raise RuntimeError(
-                "Failed to restore dual animation routing names (%s)"
-                % "; ".join(restore_errors))
 
 
 @contextmanager
 def _temporary_cast_animation_settings(import_at_time=False):
-    restored, seen = [], set()
-    with _temporary_cast_settings({"importAtTime": bool(import_at_time),
-                                   "importReset": False, "importLooping": False}):
-        try:
-            if _units_module().scene_is_metric():
-                for module in _loaded_castplugin_modules():
-                    runtime = getattr(module, "runtimeSettings", None)
-                    if runtime is not None and id(runtime) not in seen:
-                        seen.add(id(runtime))
-                        old = runtime.get("retargetScale", 1.0)
-                        restored.append((runtime, old))
-                        runtime["retargetScale"] = old * 30.48
-            yield
-        finally:
-            for runtime, old in restored:
-                runtime["retargetScale"] = old
+    ensure_cast_plugin()
+    backend = _cast_backend()
+    runtime = {}
+    if _units_module().scene_is_metric():
+        runtime["retargetScale"] = backend.module.runtimeSettings.get("retargetScale", 1.0) * 30.48
+    with backend.options({"importAtTime": bool(import_at_time),
+                          "importReset": False, "importLooping": False}, runtime=runtime):
+        yield
 
 
 def _cast_animation_import_options(import_at_time=False):
@@ -2217,6 +1967,7 @@ def _apply_clip_reference_pose_compensation(
     }
 
 
+@_cast_read_session()
 def _import_dual_animation_side(
         state, side, animation_path, selected_hand_names, frame_offset=0.0):
     animation_path = _validate_cast_path(
@@ -2479,6 +2230,7 @@ def _update_output_file_stats(payload, output_paths):
 def _write_manifest(result):
     if not result.output_manifest:
         return
+    result.cast_backend = _cast_backend().info()
     payload = asdict(result)
     _update_output_file_stats(payload, {
         "scene": result.output_scene,
@@ -3425,6 +3177,7 @@ def _cut_dual_keys(state, side, selected_hand_names, frame_range):
         )
 
 
+@_cast_read_session()
 def replace_dual_animation(side, animation_path):
     """Replace one side of an existing dual-wield scene in-place."""
     global _LAST_RESULT
@@ -3941,51 +3694,52 @@ def _run_animation_queue(viewhands_path, weapon_path, paths, options,
                 item = {"inputs": list(job), "status": "failed"}
                 _LAST_RESULT = None
                 try:
-                    for path in job:
-                        _cast_animation_inventory(_validate_cast_path(path, "Animation"))
-                    if dual:
-                        result = attach_dual_wield(
-                            viewhands_path, weapon_path, job[0], job[1], options)
-                    else:
-                        if baseline_result is None:
-                            baseline_result = _build_single_attachment(
-                                viewhands_path, weapon_path, options)
-                            cmds.file(rename=baseline_path)
-                            cmds.file(save=True, type="mayaAscii", force=True)
+                    with _cast_read_session():
+                        for path in job:
+                            _cast_animation_inventory(_validate_cast_path(path, "Animation"))
+                        if dual:
+                            result = attach_dual_wield(
+                                viewhands_path, weapon_path, job[0], job[1], options)
                         else:
-                            cmds.file(baseline_path, open=True, force=True,
-                                      prompt=False, executeScriptNodes=False)
-                        result = replace(
-                            baseline_result, animated_outputs=True,
-                            warnings=list(baseline_result.warnings),
-                            animation_path=job[0])
-                        if hasattr(baseline_result, "_cast_bind_model"):
-                            result._cast_bind_model = baseline_result._cast_bind_model
-                        if hasattr(baseline_result, "_cast_bind_error"):
-                            result._cast_bind_error = baseline_result._cast_bind_error
-                        _LAST_RESULT = result
-                        result.animation_verification = import_animation_file(
-                            job[0], protect_translation=True,
-                            source_joint=options.source_joint,
-                            target_joint=options.target_joint)
-                        if not result.animation_verification["anim_curve_count"]:
-                            raise RuntimeError("Animation contains no matching joint tracks")
-                        result.frame_range = tuple(
-                            result.animation_verification["animation_range"])
-                        _write_animation_outputs(result, options)
-                    item.update(
-                        status=("failed" if len(result.output_errors) ==
-                                len(selected_output_formats(options)) else
-                                "partial" if result.output_errors else "ok"),
-                        manifest=result.output_manifest,
-                        output_errors=dict(result.output_errors),
-                        outputs={name: getattr(result, "output_%s" % name)
-                                 for name in ("scene", "cast", "smd", "fbx")
-                                 if getattr(result, "output_%s" % name) and
-                                 ("ma" if name == "scene" else name)
-                                 not in result.output_errors},
-                        frame_range=list(result.frame_range),
-                        framerate=result.framerate)
+                            if baseline_result is None:
+                                baseline_result = _build_single_attachment(
+                                    viewhands_path, weapon_path, options)
+                                cmds.file(rename=baseline_path)
+                                cmds.file(save=True, type="mayaAscii", force=True)
+                            else:
+                                cmds.file(baseline_path, open=True, force=True,
+                                          prompt=False, executeScriptNodes=False)
+                            result = replace(
+                                baseline_result, animated_outputs=True,
+                                warnings=list(baseline_result.warnings),
+                                animation_path=job[0])
+                            if hasattr(baseline_result, "_cast_bind_model"):
+                                result._cast_bind_model = baseline_result._cast_bind_model
+                            if hasattr(baseline_result, "_cast_bind_error"):
+                                result._cast_bind_error = baseline_result._cast_bind_error
+                            _LAST_RESULT = result
+                            result.animation_verification = import_animation_file(
+                                job[0], protect_translation=True,
+                                source_joint=options.source_joint,
+                                target_joint=options.target_joint)
+                            if not result.animation_verification["anim_curve_count"]:
+                                raise RuntimeError("Animation contains no matching joint tracks")
+                            result.frame_range = tuple(
+                                result.animation_verification["animation_range"])
+                            _write_animation_outputs(result, options)
+                        item.update(
+                            status=("failed" if len(result.output_errors) ==
+                                    len(selected_output_formats(options)) else
+                                    "partial" if result.output_errors else "ok"),
+                            manifest=result.output_manifest,
+                            output_errors=dict(result.output_errors),
+                            outputs={name: getattr(result, "output_%s" % name)
+                                     for name in ("scene", "cast", "smd", "fbx")
+                                     if getattr(result, "output_%s" % name) and
+                                     ("ma" if name == "scene" else name)
+                                     not in result.output_errors},
+                            frame_range=list(result.frame_range),
+                            framerate=result.framerate)
                 except Exception as exc:
                     _LAST_RESULT = None
                     item["error"] = str(exc)
@@ -4046,6 +3800,7 @@ def _set_playback_range_from_curves(curves):
     return _set_scene_animation_range((start, end))
 
 
+@_cast_read_session()
 def import_animation_file(animation_path,
                           protect_translation=True,
                           source_joint=DEFAULT_SOURCE_JOINT,
@@ -4053,6 +3808,7 @@ def import_animation_file(animation_path,
     global _LAST_RESULT
 
     animation_path = _validate_cast_path(animation_path, "Animation")
+    inventory = _cast_animation_inventory(animation_path)
     current = validate_attachment(source_joint, target_joint)
     source_uuid = current["source_uuid"]
     target_uuid = current["target_uuid"]
@@ -4096,7 +3852,7 @@ def import_animation_file(animation_path,
             pass
     # Re-import can reuse existing curves, so returnNewNodes is not a complete
     # list of animation targets (notably when reopening a metric output MA).
-    for record in _cast_animation_inventory(animation_path)["curve_records"]:
+    for record in inventory["curve_records"]:
         targets = ([_node_from_uuid(hand_uuid)] if record["node"] == source_joint else
                    cmds.ls(record["node"], type="joint", long=True) or [])
         attribute = "rotate" if record["property"] == "rq" else record["property"]
@@ -4107,7 +3863,9 @@ def import_animation_file(animation_path,
     if not anim_curves:
         raise RuntimeError("Imported animation created no matching keyframes")
     animation_range = _curve_time_range(anim_curves)
-    playback_range = _set_playback_range_from_curves(anim_curves)
+    if not animation_range:
+        raise RuntimeError("Imported animation created no usable keyframes")
+    playback_range = _set_scene_animation_range(animation_range)
 
     if _LAST_RESULT and _LAST_RESULT.source_uuid == source_uuid:
         _LAST_RESULT.animation_path = animation_path
@@ -4135,7 +3893,7 @@ def import_animation_file(animation_path,
 def _cast_content_counts(path):
     """Return lightweight top-level model/animation counts for one CAST."""
     module = _castplugin_module()
-    cast_file = module.Cast.load(path)
+    cast_file = _cast_backend().read(path)
     models = 0
     animations = 0
     for root in cast_file.Roots():
@@ -4239,6 +3997,7 @@ def _import_dropped_animation(path):
             cmds.undoInfo(closeChunk=True)
 
 
+@_cast_read_session()
 def handle_external_cast_drop(data, do_drop):
     """Handle one external drop and return an MExternalDropCallback status."""
     default = OpenMayaUI.MExternalDropCallback.kMayaDefault
@@ -4358,6 +4117,7 @@ def _refresh_persisted_dual_manifest(state, validation):
             "Unable to read the persisted dual manifest: %s" % exc)
     payload.update({
         "plugin_version": VERSION,
+        "cast_backend": _cast_backend().info(),
         "left_animation_path": state["left_animation_path"],
         "right_animation_path": state["right_animation_path"],
         "left_clip_range": list(state["left_clip_range"]),
@@ -5736,10 +5496,8 @@ def _about_message():
         "  overwrites; JSON reports record results.\n\n"
         "COMPATIBILITY\n"
         "- Expected: Maya 2022+ in Python 3 mode.\n"
-        "  Verified: Maya 2025 for Windows.\n"
-        "- Uses an already loaded compatible Cast translator, or the "
-        "adjacent\n"
-        "  patched CAST 2.00 fallback.\n\n"
+        "  Verified: Maya 2027 for Windows.\n"
+        "- Bundled private CAST 2.01 backend; external Cast remains independent.\n\n"
         "DUAL-WIELD SCOPE\n"
         "- Duplicates the same weapon; does not merge two different weapon\n"
         "  skeletons.\n\n"
@@ -5819,13 +5577,16 @@ def create_menu():
 
 
 def initializePlugin(m_object):
-    global _CAST_TRANSLATOR_FALLBACK_REGISTERED, _TOOLKIT_PLUGIN_PATH
+    global _TOOLKIT_PLUGIN_PATH
     plugin = OpenMayaMPx.MFnPlugin(m_object, "OpenCode", VERSION, "Any")
     try:
         _TOOLKIT_PLUGIN_PATH = os.path.normpath(os.path.abspath(
             cmds.pluginInfo(plugin.name(), query=True, path=True)))
     except Exception:
         _TOOLKIT_PLUGIN_PATH = globals().get("__file__", "")
+    # Resolve dependencies before registering commands, so missing/corrupt
+    # installations cannot leave commands behind after a failed load.
+    backend = _cast_backend()
     plugin.registerCommand(COMMAND_NAME, cmdCreator)
     try:
         plugin.registerCommand(LEGACY_COMMAND_NAME, cmdCreator)
@@ -5838,20 +5599,26 @@ def initializePlugin(m_object):
     except RuntimeError as exc:
         log("could not persist %s auto-load preference: %s" % (
             PRODUCT_SHORT_NAME, exc))
-    if cmds.about(batch=True):
-        try:
-            ensure_cast_plugin()
-        except Exception as exc:
-            log("official Cast batch load unavailable; using fallback: %s" % exc)
-            _register_batch_cast_translator(plugin)
-    else:
-        ensure_cast_plugin()
-        _install_cast_drop_callback()
-        cmds.evalDeferred(create_menu)
+    try:
+        backend.register(plugin)
+        if not cmds.about(batch=True):
+            _install_cast_drop_callback()
+            cmds.evalDeferred(create_menu)
+        log("private CAST backend: %s" % backend.info())
+    except Exception:
+        for label, cleanup in (
+                ("drop callback", _remove_cast_drop_callback),
+                ("CAST translator", lambda: backend.unregister(plugin)),
+                (LEGACY_COMMAND_NAME, lambda: plugin.deregisterCommand(LEGACY_COMMAND_NAME)),
+                (COMMAND_NAME, lambda: plugin.deregisterCommand(COMMAND_NAME))):
+            try:
+                cleanup()
+            except Exception as cleanup_error:
+                log("failed initialization cleanup for %s: %s" % (label, cleanup_error))
+        raise
 
 
 def uninitializePlugin(m_object):
-    global _CAST_TRANSLATOR_FALLBACK_REGISTERED
     plugin = OpenMayaMPx.MFnPlugin(m_object)
     _remove_cast_drop_callback()
     if cmds.window(WINDOW_NAME, exists=True):
@@ -5859,13 +5626,7 @@ def uninitializePlugin(m_object):
     if cmds.window(DUAL_WINDOW_NAME, exists=True):
         cmds.deleteUI(DUAL_WINDOW_NAME)
     remove_menu()
-    if _CAST_TRANSLATOR_FALLBACK_REGISTERED:
-        try:
-            plugin.deregisterFileTranslator("Cast")
-        except RuntimeError as exc:
-            log("Cast translator was already unavailable during unload: %s" % exc)
-        finally:
-            _CAST_TRANSLATOR_FALLBACK_REGISTERED = False
+    _cast_backend().unregister(plugin)
     for command_name in (LEGACY_COMMAND_NAME, COMMAND_NAME):
         try:
             plugin.deregisterCommand(command_name)

@@ -9,7 +9,7 @@
 - Windows 是目前已验证的操作系统。**打开输出目录** 使用 Windows 专用的
   `os.startfile`；核心 Maya 工作流尚未在 macOS 或 Linux 上完成认证。
 - Release 压缩包已包含基于
-  [dtzxporter/cast v2.00](https://github.com/dtzxporter/cast/releases/tag/v2.00)
+  [dtzxporter/cast v2.01](https://github.com/dtzxporter/cast/releases/tag/v2.01)
   的项目补丁版 Maya 转换器，从压缩包安装时无需另行下载 CAST。
 - 骨骼命名符合下文约定的 CAST 文件。
 
@@ -19,10 +19,11 @@
 
 ## 安装
 
-1. 备份目标 Maya 插件目录中已有的 `castplugin.py` 和 `cast.py`。不要复制
-   或覆盖 `cast.cfg`，其中保存了个人 CAST 设置。
-2. 选择一个 Release 版本，把其中 `plug-ins` 目录的全部文件复制到 Maya
-   的 `MAYA_PLUG_IN_PATH` 目录。两个版本均包含补丁版 CAST 2.00：
+1. 升级前保存场景、关闭 Maya 并备份工具包文件。保留独立安装的
+   `castplugin.py`、`cast.py` 和 `cast.cfg`；工具包不再覆盖这些文件。
+2. 选择一个 Release 版本，把其中 `plug-ins` 的全部文件和子目录复制到 Maya
+   的 `MAYA_PLUG_IN_PATH` 目录。两个版本均包含 `cod_viewmodel_cast_backend.py`、
+   `cod_viewmodel_cast/{cast.py,castplugin.py}`、`cod_viewmodel_units.py` 及工具包入口：
    - 英文版：`viewmodel_weapon_toolkit.py`。
    - 简体中文版：同时复制 `viewmodel_weapon_toolkit.py` 和
      `viewmodel_weapon_toolkit_zh_CN.py`；前者是共享核心。
@@ -34,11 +35,28 @@
 5. 从 Maya 主菜单打开 **CoD Viewmodel Toolkit**（英文版）或
    **CoD 视角模型工具包**（中文版）。
 
-如果使用源码仓库，请将 `third_party/cast/cast.py` 和
-`third_party/cast/castplugin.py` 与所选工具包入口文件放在同一插件目录。
+源码仓库可直接加载 `plug-ins` 下的所选入口，后端会自动找到 `third_party/cast`，
+无需把其中的文件复制到入口旁。Release 安装时请保留完整的 `cod_viewmodel_cast`
+目录，不要把其中的 `castplugin.py` 当作独立 Maya 插件加载。
 
 插件同时注册新命令 `viewmodelWeaponToolkit` 和兼容命令 `attachGun`。
 英文版、中文版和旧入口注册相同命令，因此只能为其中一个版本启用自动加载。
+
+### 私有 CAST 后端
+
+工具包注册 `CoDToolkitCast`，与外部插件的 `Cast` 转换器分开。无论外部 CAST
+何时加载，工具包都使用内置实现。界面与批处理共用同一后端；每次操作的选项和
+运行设置都会在成功或失败后恢复，不读取或改写个人 `cast.cfg`。
+
+单武器与双持动画通过明确的完整 DAG 路径匹配，不再临时改名场景关节。已有组装
+持久名称（包括双持 `akimbo_l_`／`akimbo_r_` 前缀）不变。节点、静止变换和曲线查找
+缓存以每段动画为边界。单武器动画拖放回归实测物理解析从 4 次降为 1 次；下一次
+操作仍重新读取文件，当前读取会话中的文件变更也会使缓存失效。
+
+CAST 2.01 修复变换组下骨架导出的父索引。本项目另修复多条曲线模式覆盖只处理
+最后一条的问题，保留平移、旋转、缩放各自的启用标志。这些属于正确性修复，
+不计作性能收益。详见 [3.5.0 更新说明](RELEASE_NOTES_3.5.0.md)、
+[后端研究](CAST_BACKEND_RESEARCH.md)和[测量记录](CAST_BACKEND_BENCHMARK.md)。
 
 ## 骨骼约定
 
@@ -98,6 +116,8 @@ SMD 位移采用厘米，旋转采用 XYZ 欧拉角、弧度单位。
 四种格式均可关闭，也可以分别指定输出目录。工具不会覆盖已有文件，而是
 自动追加 `_v001` 一类版本后缀。
 
+挂载成功仍不弹完成提示；错误、部分格式导出失败和未保存场景提示继续保留。
+
 ## 动画批量导出
 
 1. 从工具包菜单或对应构建器打开 **单武器动画批量导出** 或 **双持动画批量导出**。
@@ -128,8 +148,9 @@ Python 接口：`batch_export_animations(hands, weapon, animation_paths, options
 
 | 支持级别 | 环境 | 状态 |
 | --- | --- | --- |
-| 预期最低版本 | Maya 2022、Python 3.7.7、补丁版 CAST 2.00 | 源码语法和所需 Maya API 兼容；尚未在 Maya 2022 中执行基于实际资产的完整回归。 |
-| 发布验证版本 | Maya 2025、Python 3.11.4、补丁版 CAST 2.00、Windows | 单武器、双持、中文界面和导出的发布验证目标。 |
+| 预期最低版本 | Maya 2022、Python 3.7.7、私有补丁版 CAST 2.01 | Python 3.7 语法与 API 兼容性目标；未在 Maya 2022 执行完整宿主回归。 |
+| 当前验证版本 | Maya 2027、Python 3.13.9、私有补丁版 CAST 2.01、Windows | 3.5.0 后端身份、父索引、目标路由和操作生命周期回归在此环境运行；已完成项目见更新说明。 |
+| 历史验证版本 | Maya 2025、Python 3.11.4、此前内置 CAST 版本、Windows | 旧版验证过单武器、双持、中文界面和导出；3.5.0 未在此版本重新测试。 |
 
 Windows 或 Linux 版 Maya 2022 也可以用 Python 2 模式启动；本工具包必须在
 Python 3 模式下运行。Maya 2021 及更早版本不受支持。最低版本结论来自代码
@@ -148,13 +169,18 @@ mayapy tests/verify_plugin_identity.py
 mayapy tests/verify_reference_pose_compensation.py
 mayapy tests/verify_batch_animation_export.py
 mayapy tests/verify_cast_v200.py
+mayapy tests/verify_cast_v201.py
+mayapy tests/verify_private_cast_backend.py
+mayapy tests/verify_animation_read_session.py
 mayapy tests/verify_maya_drop_module_path.py
 ```
 
 批量回归会自动生成合成 CAST 样本，检查双持两种播放模式、四种输出及 FBX
 重新导入后的逐帧结果。公开仓库不包含游戏资产。
 具体覆盖范围见[批量导出验证记录](BATCH_ANIMATION_VERIFICATION.md)。
-CAST 2.00 与原生界面检查见 [3.2.0 验证记录](VERIFICATION_3.2.0.md)。
+本版检查见 [3.5.0 更新说明](RELEASE_NOTES_3.5.0.md)和
+[后端测量记录](CAST_BACKEND_BENCHMARK.md)；CAST 2.00 与原生界面历史检查见
+[3.2.0 验证记录](VERIFICATION_3.2.0.md)。
 
 使用 `python scripts/build_release.py <output-dir>` 构建四个平台／语言安装包。
 
