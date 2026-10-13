@@ -1,7 +1,6 @@
 """Mayapy: a private CAST gateway isolates models and safely routes animations."""
 
 import argparse
-import json
 from pathlib import Path
 import sys
 import tempfile
@@ -384,73 +383,16 @@ def run_color_autoload(namespace, folder):
     print("CAST_GATEWAY_COLOR_AUTOLOAD_OK: Maya bundled lookdevKit loaded on demand; no external CAST", flush=True)
 
 
-def namespace_probe(core, model):
-    """Characterize the shipped translator without changing any runtime code."""
-    results = []
-    for active, relative, direct in ((False, False, False), (True, False, False),
-                                     (True, True, False), (True, False, True),
-                                     (True, True, True)):
-        cmds.file(new=True, force=True)
-        cmds.namespace(setNamespace=":")
-        cmds.namespace(relativeNames=False)
-        before_nodes = set(cmds.ls(long=True) or [])
-        cmds.namespace(relativeNames=relative)
-        if active:
-            cmds.namespace(addNamespace="probe")
-            cmds.namespace(setNamespace=":probe")
-        error = ""
-        try:
-            if direct:
-                serializer = core._cast_backend().serializer
-                document = serializer.Cast.load(str(model))
-                for root in document.Roots():
-                    for child in root.childNodes:
-                        if isinstance(child, serializer.Model):
-                            core._castplugin_module().importModelNode(child, str(model))
-                report = {"requested_namespace": "probe"}
-            else:
-                report = core.import_cast(str(model), "probe")
-        except RuntimeError as exception:
-            error = str(exception)
-            report = {"requested_namespace": "probe"}
-        active_namespace = cmds.namespaceInfo(currentNamespace=True, absoluteName=True)
-        relative_names = bool(cmds.namespace(query=True, relativeNames=True))
-        cmds.namespace(relativeNames=False)
-        groups = {}
-        for node in sorted(set(cmds.ls(long=True) or []) - before_nodes):
-            groups.setdefault(cmds.nodeType(node), []).append(node)
-        results.append({
-            "active_namespace": active_namespace,
-            "relative_names": relative_names,
-            "direct": direct,
-            "error": error,
-            "requested_namespace": report["requested_namespace"],
-            "namespaces": cmds.namespaceInfo(listOnlyNamespaces=True) or [],
-            "nodes_by_type": groups,
-        })
-        cmds.namespace(setNamespace=":")
-        cmds.namespace(relativeNames=False)
-    print("CAST_NAMESPACE_PROBE", json.dumps(results, sort_keys=True), flush=True)
-    return results
-
-
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--probe-namespace", action="store_true")
     parser.add_argument("--color-autoload", action="store_true")
     parser.add_argument("--plugin", type=Path, default=ROOT / "plug-ins/viewmodel_weapon_toolkit.py")
     arguments = parser.parse_args()
     plugin = arguments.plugin.resolve()
     cmds.loadPlugin(str(plugin), quiet=True)
     namespace = loaded_plugin_globals(plugin)
-    core = namespace["_core_runtime"]()
     with tempfile.TemporaryDirectory(prefix="cod_cast_gateway_") as temporary:
         folder = Path(temporary)
-        if arguments.probe_namespace:
-            hands = folder / "hands.cast"
-            make_model(core, hands, True)
-            namespace_probe(core, hands)
-            return
         if arguments.color_autoload:
             run_color_autoload(namespace, folder)
             return
