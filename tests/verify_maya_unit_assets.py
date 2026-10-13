@@ -12,6 +12,7 @@ plugin = ROOT / "plug-ins/viewmodel_weapon_toolkit.py"
 cmds.loadPlugin(str(plugin), quiet=True)
 core = _module_from_path(plugin)
 settings = core.AttachOptions(output_dir=output, force_new_scene=True,
+    save_scene=True,
     export_fbx=True, export_smd=True, export_animation=True, output_unit="m")
 result = core._build_single_attachment(hands, weapon, settings)
 result.animated_outputs = True

@@ -19,7 +19,8 @@ def main():
             for fail in (False, True, "partial"):
                 fake = MagicMock()
                 fake.output_errors = {"fbx": "fixture partial failure"} if fail == "partial" else {}
-                options = module.AttachOptions(force_new_scene=True)
+                options = module.AttachOptions(
+                    force_new_scene=True, save_scene=callback == "_batch_from_dialog")
                 with patch.multiple(module,
                         _require_dialog_paths=lambda **kw: ("hands.cast", "weapon.cast"),
                         _dialog_options=lambda **kw: options,

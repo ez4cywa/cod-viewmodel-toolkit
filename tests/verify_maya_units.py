@@ -49,6 +49,7 @@ def main():
             ("j_slide", "tz", 1, 4, "absolute"),
             ("j_slide", "rq", (0, 0, 0, 1), (0, 0, 0.3826834, 0.9238795), "absolute")])
         settings = core.AttachOptions(output_dir=str(folder / "out"), force_new_scene=True,
+            save_scene=True, export_cast=True,
             export_fbx=True, export_smd=True, export_animation=True, output_unit="m")
         result = core._build_single_attachment(str(hands), str(weapon), settings)
         result.animated_outputs = True
@@ -113,6 +114,7 @@ def main():
             ("j_slide", "tz", 1, 4, "absolute")])
         dual = core.attach_dual_wield(str(hands), str(weapon), str(dual_clip), str(dual_clip),
             core.DualWieldOptions(output_dir=str(folder / "dual"), force_new_scene=True,
+                save_scene=True,
                 export_animation=True, export_fbx=True, export_smd=True, output_unit="m"))
         assert not dual.output_errors, dual.output_errors
         dual_nodes = [core._short_name(n) for n in cmds.ls(type="joint")]

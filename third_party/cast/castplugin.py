@@ -1036,6 +1036,7 @@ def utilityQueryMaterialSlots(shader, matNode, path):
 
 
 def utilityAssignMaterialSlots(shader, slots, basic, path):
+    shaderLeaf = shader.rsplit(":", 1)[-1]
     # Determine workflow, metalness/roughness or specular/gloss
     metalness = ("metal" in slots and not basic)
 
@@ -1090,7 +1091,7 @@ def utilityAssignMaterialSlots(shader, slots, basic, path):
         used.append(switcher[slot])
 
         if connection.__class__ is File:
-            node = cmds.shadingNode("file", name=("%s_%s" % (shader, slot)),
+            node = utilityNewShadingNode("file", name=("%s_%s" % (shaderLeaf, slot)),
                                     isColorManaged=True, asTexture=True)
 
             # This prevents scene color space rules from overriding our file ones.
@@ -1106,12 +1107,12 @@ def utilityAssignMaterialSlots(shader, slots, basic, path):
             cmds.setAttr("%s.fileTextureName" % node,
                          utilityBuildPath(path, connection.Path()), type="string")
 
-            texture2dNode = cmds.shadingNode("place2dTexture",
-                                             name=("place2dTexture_%s_%s" % (shader, slot)), asUtility=True)
+            texture2dNode = utilityNewShadingNode("place2dTexture",
+                                             name=("place2dTexture_%s_%s" % (shaderLeaf, slot)), asUtility=True)
             cmds.connectAttr(("%s.outUV" % texture2dNode),
                              ("%s.uvCoord" % node))
         elif connection.__class__ is Color:
-            node = cmds.shadingNode("colorConstant",
+            node = utilityNewShadingNode("colorConstant",
                                     name=("color_%s" % slot), asUtility=True)
 
             # Handle color conversion if necessary, maya color node is linear.
@@ -1125,15 +1126,17 @@ def utilityAssignMaterialSlots(shader, slots, basic, path):
         else:
             continue
 
-        # Update the shader node.
-        mel.eval("shaderfx -sfxnode %s -update" % shader)
+        # Standard Surface and Lambert do not use ShaderFX. Their texture
+        # connections must not require loading an unrelated ShaderFX plugin.
+        if cmds.nodeType(shader) in ("ShaderfxShader", "StingrayPBS"):
+            mel.eval('shaderfx -sfxnode "%s" -update' % shader)
 
         # If we don't have a map for this material, skip to next one.
         if not slot in switcher:
             continue
 
         if slot == "normal":
-            normaMap = cmds.shadingNode("bump2d", asUtility=True)
+            normaMap = utilityNewShadingNode("bump2d", asUtility=True)
 
             # Tangent space normal map.
             cmds.setAttr("%s.bumpInterp" % normaMap, 1)
@@ -1143,7 +1146,7 @@ def utilityAssignMaterialSlots(shader, slots, basic, path):
             cmds.connectAttr(("%s.outNormal" % normaMap), ("%s.%s" %
                              (shader, switcher[slot])), force=True)
         elif slot == "gloss":
-            invert = cmds.shadingNode("reverse", asUtility=True)
+            invert = utilityNewShadingNode("reverse", asUtility=True)
 
             cmds.connectAttr(("%s.outColor" % node),
                              ("%s.input" % invert), force=True)
@@ -1177,6 +1180,29 @@ def utilityGetMaterial(mesh, path):
     return None
 
 
+def utilityNamespaceName(name):
+    """Keep material creation and lookup absolute in the active namespace.
+
+    Maya can return only a leaf name from shadingNode in relative-name mode.
+    Passing that leaf to later attribute commands can hit a root material.
+    """
+    if name.startswith(":"):
+        return name
+    namespace = cmds.namespaceInfo(currentNamespace=True, absoluteName=True)
+    return namespace.rstrip(":") + ":" + name
+
+
+def utilityNewShadingNode(nodeType, name=None, **options):
+    """Return an absolute node name, including Maya's unique leaf suffix."""
+    if nodeType == "colorConstant" and "colorConstant" not in cmds.allNodeTypes():
+        # The constant-color node ships with Maya's lookdevKit; it may not be
+        # auto-loaded in a clean batch profile. Never create an unknown node.
+        cmds.loadPlugin("lookdevKit", quiet=True)
+    requested = utilityNamespaceName(name or (nodeType + "#"))
+    created = cmds.shadingNode(nodeType, name=requested, **options)
+    return requested.rsplit(":", 1)[0] + ":" + created.rsplit(":", 1)[-1]
+
+
 def utilityCreateMaterial(name, type, slots={}, path=""):
     switcher = {
         None: "lambert",
@@ -1200,7 +1226,7 @@ def utilityCreateMaterial(name, type, slots={}, path=""):
     if cmds.getClassification(mayaShaderType) == [u'']:
         mayaShaderType = switcher[None]
 
-    materialInstance = cmds.shadingNode(
+    materialInstance = utilityNewShadingNode(
         mayaShaderType, asShader=True, name=name)
 
     utilityAssignMaterialSlots(
@@ -1972,7 +1998,7 @@ def importSkeletonNode(skeleton):
 
 def importMaterialNode(path, material):
     # If you already created the material, ignore this
-    materialName = utilitySanitize(material.Name())
+    materialName = utilityNamespaceName(utilitySanitize(material.Name()) or "CastMaterial")
 
     if cmds.objExists("%sSG" % materialName):
         return materialName
@@ -1987,6 +2013,7 @@ def importMaterialNode(path, material):
     materialGroup = cmds.sets(renderable=True,
                               empty=True,
                               name=("%sSG" % materialNew))
+    materialGroup = materialNew.rsplit(":", 1)[0] + ":" + materialGroup.rsplit(":", 1)[-1]
 
     # Connect shader -> surface
     cmds.connectAttr(("%s.outColor" % materialNew),

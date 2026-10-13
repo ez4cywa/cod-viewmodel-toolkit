@@ -27,6 +27,7 @@ DOCUMENTS = (
     "docs/RELEASE_NOTES_3.5.0.md", "docs/CAST_BACKEND_RESEARCH.md",
     "docs/CAST_BACKEND_BENCHMARK.md", "docs/RELEASE_CHECKLIST.md",
     "docs/RELEASE_NOTES_3.5.1.md",
+    "docs/RELEASE_NOTES_3.6.0.md",
 )
 VERSION_FILES = (
     "plug-ins/viewmodel_weapon_toolkit.py",
@@ -42,6 +43,7 @@ def _file_catalog(platform, edition):
     if platform == "maya":
         for name in ("SECURITY.md", "plug-ins/viewmodel_weapon_toolkit.py",
                      "plug-ins/cod_viewmodel_units.py",
+                     "plug-ins/cod_viewmodel_exports.py",
                      "plug-ins/cod_viewmodel_cast_backend.py"):
             files[name] = name
         for name in ("cast.py", "castplugin.py"):

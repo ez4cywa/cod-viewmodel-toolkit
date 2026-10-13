@@ -2,6 +2,28 @@
 
 All notable changes to this project are documented here.
 
+## [3.6.0] - 2026-10-13
+
+- Add a built-in Import CAST menu and fixed-backend model/animation drops,
+  without requiring an external CAST plugin. Model imports use fresh namespaces;
+  animations require a valid toolkit assembly and retain collision-safe routing.
+- Reject malformed/ambiguous, mixed model-animation and instance inputs without
+  falling back to an external translator; unrelated file drops remain unchanged.
+- Fix material-name qualification in the bundled Maya importer so namespace
+  isolation does not reuse or change a root-namespace material.
+- Default all four Maya outputs to off. Single/dual/quick builders retain the
+  assembly without creating files when no format is selected.
+- Migrate only the four saved output choices once; preserve other settings
+  and allow subsequent explicit choices to be saved normally.
+- Add English/Chinese standalone FBX and SMD export dialogs with explicit
+  static/animated mode, frame range and output units.
+- Export a scene copy in an isolated Maya worker; preserve the live scene,
+  publish only the chosen format and version filenames without overwriting.
+- Allow a scene-only result to allocate its first selected outputs later via
+  Save Current Result. Batch exporters still require at least one format.
+- Add optional-output, CAST import gateway, standalone export and UI regressions.
+  MAX output is deferred; Blender behavior and its CAST importer are unchanged.
+
 ## [3.5.1] - 2026-10-13
 
 - Resolve the metric export worker's actual core implementation independently

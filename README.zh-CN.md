@@ -23,9 +23,11 @@
 | 将武器装到手臂上 | 将武器 `j_gun` 挂到手臂 `tag_weapon` 下，归零武器局部平移，不冻结关节。 |
 | 组装双持武器 | 同一武器复制两份，分别挂接左右挂点，支持同时或顺序播放两段动画。 |
 | 只换一侧动画 | 在已有双持组装中替换左侧或右侧片段，无需重建模型。 |
+| 在 Maya 中直接导入 CAST | 使用内置 **导入 CAST…**，隔离导入模型或安全匹配动画，无需另装 CAST 插件。 |
 | 处理静止姿态不同造成的偏移 | 指定兼容参考手臂，补偿武器挂点的相对／叠加位移动画。 |
 | 一次导出多个动画 | 单片段或左右配对加入队列，独立选择格式与目录，生成逐项 JSON 报告。 |
 | 输出米制资产 | 可按输入为英尺换算输出副本，保留源文件和当前工作组装。 |
+| 从当前 Maya 场景导出 | 单独导出 FBX／SMD，明确选择静态模型或当前动画，无需重新挂载。 |
 
 Maya 内置私有的项目补丁版 [CAST 2.01](https://github.com/dtzxporter/cast/releases/tag/v2.01) 后端；Blender 保留项目补丁版 CAST 2.00，不依赖 Maya。模型、动画和贴图由用户提供，安装包不包含游戏资产或宿主软件。
 
@@ -43,25 +45,25 @@ flowchart LR
 
 ## 下载与安装
 
-当前版本 **3.5.1**：修复 Maya 实际加载入口缺少模块属性时的米制导出；构建前完整检查版本和中文转换，失败保留已有安装包，并加入无需宿主的 CI 回归。Blender 导入／导出行为保持原样。详见[更新说明](docs/RELEASE_NOTES_3.5.1.md)。
+当前版本 **3.6.0**：Maya 四项输出默认全部关闭，可先只挂载、再按需选择格式；**导入 CAST…** 与内置拖放使用私有后端，无需另装 CAST 插件。单独 FBX/SMD 导出在隔离场景副本中输出静态模型或当前动画。Blender 行为保持原样。详见[更新说明](docs/RELEASE_NOTES_3.6.0.md)。
 
 | 平台 | 简体中文 ZIP | English ZIP | 运行环境 |
 | --- | --- | --- | --- |
-| Maya | [下载](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/download/3.5.1/cod-viewmodel-toolkit-3.5.1-maya-zh-CN.zip) | [Download](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/download/3.5.1/cod-viewmodel-toolkit-3.5.1-maya-en.zip) | 当前验证环境为 Windows Maya 2027；旧版已验证 Maya 2025；目标支持 Maya 2022+ 的 Python 3 模式。 |
-| Blender | [下载](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/download/3.5.1/cod-viewmodel-toolkit-3.5.1-blender-zh-CN.zip) | [Download](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/download/3.5.1/cod-viewmodel-toolkit-3.5.1-blender-en.zip) | 要求 Blender 5.2+；安装包验证环境为 Windows Blender 5.2.1 LTS。 |
+| Maya | [下载](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/download/3.6.0/cod-viewmodel-toolkit-3.6.0-maya-zh-CN.zip) | [Download](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/download/3.6.0/cod-viewmodel-toolkit-3.6.0-maya-en.zip) | 当前验证环境为 Windows Maya 2027；旧版已验证 Maya 2025；目标支持 Maya 2022+ 的 Python 3 模式。 |
+| Blender | [下载](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/download/3.6.0/cod-viewmodel-toolkit-3.6.0-blender-zh-CN.zip) | [Download](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/download/3.6.0/cod-viewmodel-toolkit-3.6.0-blender-en.zip) | 要求 Blender 5.2+；安装包验证环境为 Windows Blender 5.2.1 LTS。 |
 
-请选择对应**平台和语言的 ZIP**，不要将 GitHub 自动生成的“Source code”源码包当作安装包。Release 同时提供 [SHA-256 校验文件](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/download/3.5.1/SHA256SUMS.txt)。正常使用由宿主自带 Python 运行，无需另装 Python。
+请选择对应**平台和语言的 ZIP**，不要将 GitHub 自动生成的“Source code”源码包当作安装包。Release 同时提供 [SHA-256 校验文件](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/download/3.6.0/SHA256SUMS.txt)。正常使用由宿主自带 Python 运行，无需另装 Python。
 
 ### Maya
 
 1. 升级前保存工作并关闭 Maya。备份原插件文件，保留个人 `cast.cfg`，不要覆盖。
-2. 解压 ZIP，把 `plug-ins` 中的**全部文件和子目录**复制到 `MAYA_PLUG_IN_PATH` 包含的目录。`cod_viewmodel_units.py`、`cod_viewmodel_cast_backend.py` 和完整的 `cod_viewmodel_cast` 目录必须与核心文件放在一起。不要覆盖独立安装的 `cast.py`、`castplugin.py` 或 `cast.cfg`。
+2. 解压 ZIP，把 `plug-ins` 中的**全部文件和子目录**复制到 `MAYA_PLUG_IN_PATH` 包含的目录。`cod_viewmodel_units.py`、`cod_viewmodel_exports.py`、`cod_viewmodel_cast_backend.py` 和完整的 `cod_viewmodel_cast` 目录必须与核心文件放在一起。不要覆盖独立安装的 `cast.py`、`castplugin.py` 或 `cast.cfg`。
 3. 打开 Maya 插件管理器。中文版加载 `viewmodel_weapon_toolkit_zh_CN.py`，英文版加载 `viewmodel_weapon_toolkit.py`；只启用一个语言入口。
 4. 从主菜单打开 **CoD 视角模型工具包**／**CoD Viewmodel Toolkit**。
 
 从 Attach Gun 升级时，旧 `attach_gun.py` 入口和 `attachGun` 命令仍兼容；切换入口前请看[安装与兼容说明](docs/MAYA.zh-CN.md#安装)。
 
-工具包注册独立的 `CoDToolkitCast` 转换器。已有外部 CAST 可以保留，其版本和设置不再决定工具包使用的后端。只加载工具包入口，不要单独加载子目录中的 `cod_viewmodel_cast/castplugin.py`。源码仓库可直接加载入口，无需复制 `third_party` 文件。
+工具包注册独立的 `CoDToolkitCast` 转换器，工具包导入不需要另装 CAST 插件。已有外部 CAST 可以保留，其版本和设置不再决定工具包使用的后端。只加载工具包入口，不要单独加载子目录中的 `cod_viewmodel_cast/castplugin.py`。源码仓库可直接加载入口，无需复制 `third_party` 文件。
 
 ### Blender
 
@@ -77,17 +79,23 @@ flowchart LR
 
 | 目标 | Maya | Blender |
 | --- | --- | --- |
-| 第一次组装 | 打开单武器构建器，选择手臂和武器，检查输入，选择输出并组装。 | 选择 **Single Weapon**，填写模型路径，执行 **Check Inputs** 和 **Build Assembly**。 |
+| 第一次组装 | 打开单武器构建器，选择手臂和武器，检查输入，可按需选择输出后组装。 | 选择 **Single Weapon**，填写模型路径，执行 **Check Inputs** 和 **Build Assembly**。 |
+| 导入 CAST 模型 | 使用 **Import CAST...**，或在启用 **内置 CAST 拖入处理** 时拖入一个纯模型 CAST；不会自动挂载。 | 使用工具包构建器组装模型输入。 |
 | 导入单武器动画 | 使用 **Import Animation Safely...**，或向有效工具包组装中拖入纯动画 CAST。 | 选中工具包骨架，在面板中应用所选片段。 |
 | 组装双持 | 打开双持构建器，选择一份武器及左右动画，设定同时或顺序模式。 | 选择 **Dual Wield**，填写左右动画并选择播放模式。 |
 | 替换双持片段 | 在双持窗口使用 **Replace Left Clip... / Replace Right Clip...**。 | 选中工具包骨架，使用 **Replace Left / Replace Right**。 |
 | 批量导出 | 使用 **Single Animation Batch... / Dual Animation Batch...**。 | 在 **Animation Batch** 中使用 **Start Batch Export**。 |
+| 单独导出一个文件 | 使用 **Export FBX... / Export SMD...**，选择静态／当前动画、帧范围和单位。 | 选择组装体所需输出格式并导出。 |
 
-表内保留英文控件名，中文版对应“检查输入”“组装模型”“替换左／右动画”等操作。Maya 批量任务从独立场景开始，提示保存时先保存当前工作。Blender 创建专用组装集合，只导出所选组装，不带出无关对象。Blender 动画通过工具包面板导入，不能把 Maya 的外部文件安全拖放能力视为两端共有功能。
+Maya 的 **导入 CAST…** 将模型放入新的命名空间（`cast_import`、`cast_import1` 等），不清零骨骼，也不自动挂载。纯动画文件要求有效的单武器或双持工具包组装，不会在普通骨架中猜测目标。模型与动画混合容器、Instance 容器暂不支持，请分开提供纯模型和纯动画文件。**内置 CAST 拖入处理** 默认开启：不支持、损坏或多文件 CAST 拖放会明确拒绝，不转交其他导入器；关闭后恢复 Maya 默认拖放。Maya 普通 **文件 → 导入** 和外部 `Cast` 转换器不在此入口的保护范围内。详见 [CAST 导入说明](docs/MAYA.zh-CN.md#无需另装插件导入-cast)。
+
+表内保留英文控件名，中文版对应“检查输入”“组装模型”“替换左／右动画”等操作。Maya 批量任务从独立场景开始，提示保存时先保存当前工作。Blender 创建专用组装集合，只导出所选组装，不带出无关对象。Blender 动画通过工具包面板导入，不能把 Maya 的内置外部文件拖放能力视为两端共有功能。
 
 ## 输出格式与蒙皮
 
-下表针对**带动画导出**。Maya 原有构建器默认保存场景并输出静态 CAST／FBX／SMD；需要带动画的交换文件时，请使用动画批量导出。Blender 则根据选中组装是否有动画决定导出内容。
+下表针对**带动画导出**。Maya 单武器、双持与快速挂载的 MA／CAST／FBX／SMD 默认全部关闭；未勾选输出时只组装当前场景，不创建输出目录、文件或 JSON 报告。首次读取旧版保存设置时，仅重置这四个勾选项，路径、骨骼映射等设置保留，之后会记住明确选择。
+
+构建器启用 MA 时保存场景与动画，启用 CAST／FBX／SMD 时仍导出静态模型。带动画的交换文件可通过动画批量导出，或新菜单 **单独导出 FBX…／单独导出 SMD…** 的“当前动画”模式输出。独立导出可指定整数帧范围与输出单位，只写所选格式；静态 SMD 需要有效工具包挂载，动画 SMD 可使用普通骨架，FBX 可使用普通模型。第一次仅挂载后，选好格式与目录再使用 **保存当前结果**，即可首次输出。暂不提供 MAX 导出。Blender 根据选中组装是否有动画决定导出内容，默认行为未改。
 
 | 格式 | 内容 | DQS 保留情况 |
 | --- | --- | --- |
@@ -97,7 +105,7 @@ flowchart LR
 | SMD | 带动画时只输出骨架与动画，不含网格 | 不保存 DQS、骨骼缩放或帧率，由接收软件配置。 |
 | JSON | 输入、验证结果、输出路径、警告和批次结果 | 验证报告，不是模型或动画格式。 |
 
-Maya 动画流程明确设置 DQS，纯静态 Maya 导出不强制转换。已有输出不会覆盖：Maya 自动使用 `_v001` 等版本后缀，Blender 使用 `_001`；每种启用格式可指定独立目录。
+Maya 动画流程明确设置 DQS，纯静态 Maya 导出不强制转换。独立 FBX／SMD 导出使用隔离的 Maya 场景副本，米制转换与动画 FBX 的 DQS 设置只作用于副本，不改变工作场景。已有输出不会覆盖：Maya 自动使用 `_v001` 等版本后缀，Blender 使用 `_001`；每种启用格式可指定独立目录。
 
 **单位：**默认“保持原单位”。选择“米（输入：英尺）”时，以 `1 ft = 0.3048 m` 换算输出副本，不会自动识别任意 CAST 的单位。Maya FBX 的存储元数据可能仍标为厘米，但实际换算尺寸正确；再次缩放前请看[输出单位说明](docs/OUTPUT_UNITS.md)。
 
@@ -118,9 +126,9 @@ Maya 动画流程明确设置 DQS，纯静态 Maya 导出不强制转换。已�
 
 **Maya 拖入动画报 `NameError: __file__`。** 更新完整插件文件到 3.4.1 或更高版本后重启 Maya。3.4.1 已修复注册插件环境下的路径定位错误；其他报错请提供脚本编辑器中的完整堆栈。
 
-**双持场景通过普通单武器导入菜单报错。** 请使用双持窗口的左／右动画替换入口。普通单武器入口的挂接检查不等同于双持入口。
+**双持场景通过普通单武器动画菜单报错。** 请使用 **导入 CAST…**，按文件名／轨道特征识别侧别；也可使用双持窗口明确的左／右动画替换入口。普通单武器入口的挂接检查不等同于双持入口。
 
-**武器能动，但一直偏离一只手。** 检查动画是否基于另一套手臂静止姿态制作。兼容参考模型可以补偿挂点位移，直接归零骨骼不能替代这项检查。
+**武器能动，但一直偏离一只手。** 先确认使用 **导入 CAST…**、**安全导入动画…** 或已开启的内置拖放；外部 `Cast` 导入可能误匹配同名 `j_gun`，普通 Maya 导入不会被自动重定向。再检查动画是否基于另一套手臂静止姿态制作。兼容参考模型可以补偿挂点位移，直接归零骨骼不能替代这些检查。
 
 **FBX 导入后变形不同。** 先检查接收软件中的 DQS／Preserve Volume，尤其是 Blender 导出的 FBX。在 Blender 逐帧对比时将动画偏移设为 `0`，并核对单位和帧率。
 
@@ -142,12 +150,17 @@ mayapy tests/verify_private_cast_backend.py
 mayapy tests/verify_cast_v201.py
 mayapy tests/verify_animation_read_session.py
 mayapy tests/verify_maya_drop_module_path.py
+mayapy tests/verify_cast_import_gateway.py
+mayapy tests/verify_optional_outputs.py
+python tests/verify_standalone_exports.py
+python tests/verify_standalone_export_ui.py
+mayapy tests/verify_standalone_export_host.py
 python scripts/build_release.py ../release-output
 ```
 
 `mayapy` 是 Maya 自带的 Python，可用完整路径调用。构建命令生成**四个**平台／语言 ZIP，不覆盖已有压缩包。源码安装方法见 [Maya](docs/MAYA.zh-CN.md#安装)和 [Blender](docs/BLENDER.zh-CN.md) 使用说明。
 
-GitHub Actions 检查源码语法、全部 Maya 运行文件的 Python 3.7 语法、后端完整性、构建失败清理、中文转换、包内容及构建可重复性，**不运行 Maya 或 Blender**。宿主验证见[本版说明](docs/RELEASE_NOTES_3.5.1.md)和[发布清单](docs/RELEASE_CHECKLIST.md)；此前的[后端测量](docs/CAST_BACKEND_BENCHMARK.md)与[米制输出记录](docs/VERIFICATION_3.4.0.md)仍可查阅。Maya 2022 是语法与 API 兼容性目标，不代表已在该版本执行完整回归。
+GitHub Actions 检查源码语法、全部 Maya 运行文件的 Python 3.7 语法、后端完整性、独立导出与界面契约、构建失败清理、中文转换、包内容及构建可重复性，**不运行 Maya 或 Blender**。宿主验证见[本版说明](docs/RELEASE_NOTES_3.6.0.md)和[发布清单](docs/RELEASE_CHECKLIST.md)；此前的[后端测量](docs/CAST_BACKEND_BENCHMARK.md)与[米制输出记录](docs/VERIFICATION_3.4.0.md)仍可查阅。Maya 2022 是语法与 API 兼容性目标，不代表已在该版本执行完整回归。
 
 ## 项目结构
 

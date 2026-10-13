@@ -14,7 +14,9 @@ compatibility target and can be release-tested in Autodesk Maya 2027. Maya
    no third-party file copies or separate CAST installation are needed.
 3. Keep workflow changes in `viewmodel_weapon_toolkit.py`, backend identity and
    lifecycle in `cod_viewmodel_cast_backend.py`, and documented upstream
-   translator patches in `third_party/cast/castplugin.py`.
+   translator patches in `third_party/cast/castplugin.py`. Keep standalone
+   scene snapshotting, worker lifetime, conversion and final-file publication
+   behind the small `cod_viewmodel_exports.py` interface.
 4. Keep `attach_gun.py` as a compatibility loader only.
 5. Run `python tests/verify_source_contracts.py`, both vendored-backend
    checks and `python tests/verify_build_release.py`. The source check applies
@@ -27,6 +29,13 @@ compatibility target and can be release-tested in Autodesk Maya 2027. Maya
    Metric changes need `verify_metric_module_path.py` against the actual
    registered English/Chinese/legacy core and `verify_maya_units.py`; a second
    ordinary Python import does not reproduce Maya's missing module attributes.
+   Output-default changes also need `mayapy tests/verify_optional_outputs.py`.
+   Standalone export changes need `python tests/verify_standalone_exports.py`,
+   `python tests/verify_standalone_export_ui.py` and
+   `mayapy tests/verify_standalone_export_host.py`; use `--plugin <entry-path>`
+   for the installed entry or the Chinese/legacy loader.
+   CAST gateway changes also need `mayapy tests/verify_cast_import_gateway.py`
+   with no external CAST loaded, plus relevant registered-entry/drop tests.
 
 Keep `third_party/cast/cast.py` identical to the shared upstream v2.00/v2.01
 serializer; v2.01 did not change it. Any change to
@@ -41,9 +50,30 @@ GUI and batch must use the same backend. Use operation contexts for settings,
 parsed documents and animation targets; never retain scene/API objects across
 clips. Keep Maya API work on the main thread.
 
+Keep menu and enabled external-drop imports behind `import_cast_file` using
+the bundled backend. Model-only imports need a real fresh namespace for both
+creation and lookup, must not reuse existing materials, and must not attach or
+zero bones. Animation-only imports require a valid toolkit assembly and the
+existing safe single/dual routing APIs. Reject mixed model/animation or Instance
+containers rather than guessing a destination. Rejected, malformed and
+multi-file CAST drops must not fall back to another translator while built-in
+handling is on. Preserve the existing drag/drop preference key and explicit
+opt-out. Ordinary Maya File Import and external translator calls are outside
+this gateway; do not document them as protected.
+
+Single/dual/quick builds with all four outputs disabled must remain in-memory:
+no output folders, files, JSON reports or metric workers. Preserve non-output
+preferences during the one-time defaults migration. Batch APIs still require
+at least one explicitly enabled format. Standalone FBX/SMD export must preserve
+the live scene and publish only the requested format, using an isolated worker
+copy for conversion and animation skinning changes. Existing destinations must
+never be overwritten. Static SMD retains attachment validation; animated SMD
+may export an ordinary skeleton. MAX export is outside this release's scope.
+
 Blender retains its patched CAST v2.00 backend under `third_party/cast_blender`.
 The Blender package version is synchronized; its import/export algorithms
-have not been upgraded to CAST 2.01.
+have not been upgraded to CAST 2.01. The 3.6.0 all-off output defaults and
+standalone menu tools are Maya-only; Blender's existing defaults remain intact.
 
 Keep release file selection, version checks and archive bookkeeping in
 `scripts/build_release.py`. It reads and localizes all inputs before creating

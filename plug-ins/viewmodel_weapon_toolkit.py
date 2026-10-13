@@ -7,8 +7,9 @@ The plugin imports one viewhands Cast file and one weapon Cast file, then
 parents the weapon's ``j_gun`` under the viewhands' ``tag_weapon`` and zeroes
 the weapon joint's local translation. Animation import explicitly routes the
 viewhands ``j_gun`` tracks around the attached weapon's same-named root.
-Dragging a pure animation Cast file onto Maya uses that same collision-safe
-route automatically; model and unrelated Cast files retain Maya's defaults.
+The built-in CAST import menu isolates model files and routes pure animations
+through that same collision-safe path. Supported CAST drops use this importer
+without loading an external CAST plugin; unrelated files retain Maya's defaults.
 
 The original single-weapon workflow remains available. The Dual-Wield Builder
 duplicates one weapon, attaches the copies to ``tag_weapon_left`` and
@@ -22,8 +23,9 @@ viewhands file has a different local rest pose.
 
 Output formats and their folders are independently selectable: Maya ASCII
 (``.ma``), combined model Cast (``.cast``), Source model (``.smd``), and FBX
-(``.fbx``). A JSON verification manifest is always written to the common
-output folder. Release packages include a project-patched Maya Cast plugin
+(``.fbx``). Builders default to keeping the result in the scene without
+writing files. Selected exports include a JSON verification manifest in the
+common output folder. Release packages include a project-patched Maya Cast plugin
 based on official v2.01, isolated from separately installed CAST plugins.
 
 Single/dual animation queues export selected animated formats with DQS
@@ -87,7 +89,7 @@ COMMAND_NAME = "viewmodelWeaponToolkit"
 LEGACY_COMMAND_NAME = "attachGun"
 WINDOW_NAME = "ViewmodelWeaponToolkitWindow"
 DUAL_WINDOW_NAME = "ViewmodelWeaponToolkitDualWindow"
-VERSION = "3.5.1"
+VERSION = "3.6.0"
 
 VIEWHANDS_OPTVAR = "attachGun_viewhandsPath"
 OUTPUT_DIR_OPTVAR = "attachGun_outputDir"
@@ -102,6 +104,7 @@ EXPORT_MA_OPTVAR = "attachGun_exportMa"
 EXPORT_CAST_OPTVAR = "attachGun_exportCast"
 EXPORT_SMD_OPTVAR = "attachGun_exportSmd"
 EXPORT_FBX_OPTVAR = "attachGun_exportFbx"
+OPTIONAL_OUTPUTS_MIGRATION_OPTVAR = "codViewmodel_optionalOutputsDefaults"
 OUTPUT_UNIT_OPTVAR = "codViewmodel_outputUnit"
 AUTO_SAFE_DROP_OPTVAR = "attachGun_autoSafeCastAnimationDrop"
 DUAL_VIEWHANDS_OPTVAR = "attachGun_dualViewhandsPath"
@@ -143,6 +146,7 @@ _CAST_BACKEND = None
 _CAST_DROP_CALLBACK = None
 _TOOLKIT_PLUGIN_PATH = ""
 _UNITS_MODULE = None
+_EXPORTS_MODULE = None
 _OUTPUT_IN_METERS = False
 
 
@@ -174,8 +178,8 @@ class AttachOptions:
     protect_translation: bool = True
     disable_import_ik: bool = True
     disable_import_constraints: bool = True
-    save_scene: bool = True
-    export_cast: bool = True
+    save_scene: bool = False
+    export_cast: bool = False
     export_smd: bool = False
     export_fbx: bool = False
     ma_output_dir: str = ""
@@ -319,7 +323,7 @@ def save_viewhands_path(path):
 
 
 def auto_safe_drop_enabled():
-    """Return whether external animation CAST drops use the safe importer."""
+    """Return whether supported CAST drops use the built-in importer."""
     return _load_bool_option(AUTO_SAFE_DROP_OPTVAR, True)
 
 
@@ -328,6 +332,13 @@ def set_auto_safe_drop_enabled(enabled):
 
 
 def load_saved_options(force_new_scene=False):
+    # Older releases selected MA/CAST by default. Reset only the four format
+    # choices once; subsequent explicit choices and all other preferences stay.
+    if not _load_bool_option(OPTIONAL_OUTPUTS_MIGRATION_OPTVAR):
+        for name in (EXPORT_MA_OPTVAR, EXPORT_CAST_OPTVAR,
+                     EXPORT_SMD_OPTVAR, EXPORT_FBX_OPTVAR):
+            _save_bool_option(name, False)
+        _save_bool_option(OPTIONAL_OUTPUTS_MIGRATION_OPTVAR, True)
     return AttachOptions(
         output_dir=_load_string_option(OUTPUT_DIR_OPTVAR, DEFAULT_OUTPUT_DIR),
         ma_output_dir=_load_string_option(MA_OUTPUT_DIR_OPTVAR),
@@ -337,8 +348,8 @@ def load_saved_options(force_new_scene=False):
         source_joint=_load_string_option(SOURCE_JOINT_OPTVAR, DEFAULT_SOURCE_JOINT),
         target_joint=_load_string_option(TARGET_JOINT_OPTVAR, DEFAULT_TARGET_JOINT),
         protect_translation=_load_bool_option(PROTECT_TRANSLATION_OPTVAR, True),
-        save_scene=_load_bool_option(EXPORT_MA_OPTVAR, True),
-        export_cast=_load_bool_option(EXPORT_CAST_OPTVAR, True),
+        save_scene=_load_bool_option(EXPORT_MA_OPTVAR, False),
+        export_cast=_load_bool_option(EXPORT_CAST_OPTVAR, False),
         export_smd=_load_bool_option(EXPORT_SMD_OPTVAR, False),
         export_fbx=_load_bool_option(EXPORT_FBX_OPTVAR, False),
         output_unit=_load_string_option(OUTPUT_UNIT_OPTVAR, "original"),
@@ -347,6 +358,7 @@ def load_saved_options(force_new_scene=False):
 
 
 def save_options(viewhands_path, options):
+    _save_bool_option(OPTIONAL_OUTPUTS_MIGRATION_OPTVAR, True)
     save_viewhands_path(viewhands_path)
     _save_string_option(OUTPUT_DIR_OPTVAR, options.output_dir)
     _save_string_option(MA_OUTPUT_DIR_OPTVAR, options.ma_output_dir)
@@ -378,6 +390,7 @@ def clear_saved_settings():
             EXPORT_CAST_OPTVAR,
             EXPORT_SMD_OPTVAR,
             EXPORT_FBX_OPTVAR,
+            OPTIONAL_OUTPUTS_MIGRATION_OPTVAR,
             OUTPUT_UNIT_OPTVAR,
             AUTO_SAFE_DROP_OPTVAR,
             DUAL_VIEWHANDS_OPTVAR,
@@ -437,6 +450,34 @@ def _toolkit_module_dir():
     if path:
         return os.path.dirname(os.path.abspath(path))
     return ""
+
+
+def _exports_module():
+    """Load the adjacent exporter from the registered path in every Maya entry."""
+    global _EXPORTS_MODULE
+    if _EXPORTS_MODULE is None:
+        directory = _toolkit_module_dir()
+        if not directory:
+            raise RuntimeError("Unable to locate toolkit exporters: plugin path is unavailable")
+        path = os.path.join(directory, "cod_viewmodel_exports.py")
+        name = "_cod_viewmodel_exports"
+        module = sys.modules.get(name)
+        if module is not None and os.path.normcase(os.path.abspath(
+                module.__file__)) != os.path.normcase(os.path.abspath(path)):
+            raise RuntimeError("Toolkit exporters are already loaded from another installation; restart Maya")
+        if module is None:
+            spec = importlib.util.spec_from_file_location(name, path)
+            if spec is None or spec.loader is None:
+                raise RuntimeError("Unable to load toolkit exporters: %s" % path)
+            module = importlib.util.module_from_spec(spec)
+            sys.modules[name] = module
+            try:
+                spec.loader.exec_module(module)
+            except Exception:
+                sys.modules.pop(name, None)
+                raise
+        _EXPORTS_MODULE = module
+    return _EXPORTS_MODULE
 
 
 def _core_module_path():
@@ -2176,12 +2217,12 @@ def selected_output_formats(options):
     return tuple(formats)
 
 
-def validate_output_options(options):
+def validate_output_options(options, require_output=True):
+    """Validate units and require disk formats only for export-oriented actions."""
     if options.output_unit not in ("original", "m"):
         raise RuntimeError("Output unit must be original or m")
-    """Reject a run that would produce no user-selected output file."""
     formats = selected_output_formats(options)
-    if not formats:
+    if require_output and not formats:
         raise RuntimeError(
             "Select at least one output format: .ma, .cast, .smd, or .fbx")
     return formats
@@ -2432,11 +2473,13 @@ def _export_result_smd(result):
 
 def _write_result_outputs(result, options, allocate=True):
     """Write every selected output using one shared versioned basename."""
+    if not validate_output_options(options, require_output=False):
+        result.requested_outputs = dict.fromkeys(("ma", "cast", "smd", "fbx"), False)
+        return
     if options.output_unit == "m":
         return _units_module().export_copy(_core_runtime(), result, options, allocate)
     if result.animated_outputs:
         return _write_animation_outputs(result, options, allocate=allocate)
-    validate_output_options(options)
     if allocate:
         _allocate_result_output_paths(result, options.output_dir, options)
 
@@ -2482,7 +2525,7 @@ def _build_single_attachment(viewhands_path, weapon_path, options=None):
     options.target_joint = options.target_joint.strip()
     options.output_dir = os.path.normpath(os.path.abspath(
         options.output_dir or DEFAULT_OUTPUT_DIR))
-    validate_output_options(options)
+    validate_output_options(options, require_output=False)
 
     viewhands_path = _validate_cast_path(viewhands_path, "Viewhands")
     weapon_path = _validate_cast_path(weapon_path, "Weapon")
@@ -2927,7 +2970,7 @@ def attach_dual_wield(
             "Simultaneous shared hands tracks must use the right animation")
     if options.left_prefix == options.right_prefix:
         raise RuntimeError("Left and right weapon prefixes must differ")
-    validate_output_options(options)
+    validate_output_options(options, require_output=False)
 
     preflight = preflight_dual_inputs(
         viewhands_path,
@@ -3167,7 +3210,10 @@ def attach_dual_wield(
         framerate=preflight["left_animation"]["framerate"],
         warnings=warnings,
     )
-    _allocate_result_output_paths(result, options.output_dir, options)
+    if selected_output_formats(options):
+        _allocate_result_output_paths(result, options.output_dir, options)
+    else:
+        result.requested_outputs = dict.fromkeys(("ma", "cast", "smd", "fbx"), False)
     if cast_bind_model is not None:
         result._cast_bind_model = cast_bind_model
     if cast_bind_error:
@@ -3933,10 +3979,173 @@ def _cast_content_counts(path):
     cast_file = _cast_backend().read(path)
     models = 0
     animations = 0
+    instances = 0
     for root in cast_file.Roots():
         models += len(root.ChildrenOfType(module.Model))
         animations += len(root.ChildrenOfType(module.Animation))
-    return {"models": models, "animations": animations}
+        instances += len(root.ChildrenOfType(module.Instance))
+    return {"models": models, "animations": animations, "instances": instances}
+
+
+def _import_isolated_cast_models(path, namespace=None):
+    """Create only this file's models in a fresh, absolute namespace.
+
+    The upstream translator does not advertise namespace support. Its existing
+    model importer is reused directly while creation AND name lookup are scoped
+    to our namespace. This also prevents reusing an existing scene's materials.
+    No source document is edited and no alternate parser is involved.
+    """
+    base = str(namespace or "cast_import").strip()
+    if not re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", base):
+        raise RuntimeError("CAST import namespace must be one simple name")
+    candidate, index = base, 1
+    while cmds.namespace(exists=":" + candidate):
+        candidate = "%s%d" % (base, index)
+        index += 1
+    absolute = ":" + candidate
+    previous_namespace = cmds.namespaceInfo(currentNamespace=True, absoluteName=True)
+    previous_relative = bool(cmds.namespace(query=True, relativeNames=True))
+    previous_selection = cmds.ls(selection=True, long=True) or []
+    previous_modified = cmds.file(query=True, modified=True)
+    before = set(cmds.ls(uuid=True) or [])
+    module = _castplugin_module()
+    document = _cast_backend().read(path)
+    created_namespace = False
+    try:
+        cmds.namespace(addNamespace=absolute)
+        created_namespace = True
+        cmds.namespace(setNamespace=absolute)
+        cmds.namespace(relativeNames=True)
+        with _temporary_cast_settings({
+                "importMerge": False, "importReset": False,
+                "importAxis": False, "importIK": False,
+                "importConstraints": False}):
+            for root in document.Roots():
+                for model in root.ChildrenOfType(module.Model):
+                    module.importModelNode(model, path)
+        # Relative display names are not stable identities. Resolve the UUID
+        # delta only after switching back to absolute name lookup.
+        cmds.namespace(relativeNames=False)
+        cmds.namespace(setNamespace=previous_namespace)
+        created = set(cmds.ls(uuid=True) or []) - before
+        nodes = sorted(_node_from_uuid(value) for value in created)
+        if not nodes or any(_namespace_of(node) != candidate for node in nodes):
+            raise RuntimeError("CAST model import did not remain in its isolated namespace")
+        roots = [node for node in nodes if cmds.objectType(node, isAType="dagNode")
+                 and not (cmds.listRelatives(node, parent=True, fullPath=True) or [])]
+        return {"kind": "model", "path": path, "namespace": candidate,
+                "nodes": nodes, "roots": roots, "new_node_count": len(nodes)}
+    except Exception as primary:
+        errors = []
+
+        def delete_created_nodes():
+            created = set(cmds.ls(uuid=True) or []) - before
+            nodes = [_node_from_uuid(value) for value in created]
+            if nodes:
+                cmds.delete(nodes)
+
+        def delete_created_namespace():
+            if created_namespace and cmds.namespace(exists=absolute):
+                # This fresh, explicitly validated namespace did not exist before
+                # the import. Hidden importer nodes may not be in cmds.ls().
+                cmds.namespace(removeNamespace=absolute, deleteNamespaceContent=True)
+
+        for label, action in (
+                ("absolute lookup", lambda: cmds.namespace(relativeNames=False)),
+                ("previous namespace", lambda: cmds.namespace(setNamespace=previous_namespace)),
+                ("created nodes", delete_created_nodes),
+                ("created namespace", delete_created_namespace)):
+            try:
+                action()
+            except Exception as cleanup:
+                errors.append("%s: %s" % (label, cleanup))
+        if not errors:
+            try:
+                cmds.file(modified=previous_modified)
+            except Exception as cleanup:
+                errors.append("modified state: %s" % cleanup)
+        if errors:
+            raise RuntimeError("CAST model import failed: %s; cleanup: %s" % (
+                primary, "; ".join(errors))) from primary
+        raise
+    finally:
+        active_error = sys.exc_info()[1]
+        errors = []
+        for label, action in (
+                ("absolute lookup", lambda: cmds.namespace(relativeNames=False)),
+                ("previous namespace", lambda: cmds.namespace(setNamespace=previous_namespace)),
+                ("selection", lambda: cmds.select(previous_selection, replace=True)
+                 if previous_selection else cmds.select(clear=True)),
+                ("relative lookup", lambda: cmds.namespace(relativeNames=previous_relative))):
+            try:
+                action()
+            except Exception as cleanup:
+                errors.append("%s: %s" % (label, cleanup))
+        if errors:
+            message = "CAST import state restoration failed: " + "; ".join(errors)
+            if active_error is not None:
+                log(message)
+            else:
+                raise RuntimeError(message)
+
+
+@contextmanager
+def _absolute_cast_scene_names():
+    """Resolve assembly paths independently of the user's active namespace."""
+    previous = cmds.namespaceInfo(currentNamespace=True, absoluteName=True)
+    relative = bool(cmds.namespace(query=True, relativeNames=True))
+    try:
+        cmds.namespace(relativeNames=False)
+        cmds.namespace(setNamespace=":")
+        yield
+    finally:
+        cmds.namespace(setNamespace=previous)
+        cmds.namespace(relativeNames=relative)
+
+
+@_cast_read_session()
+@_absolute_cast_scene_names()
+def import_cast_file(path, namespace=None):
+    """Import a model-only CAST, or safely animate one toolkit assembly.
+
+    This entry and external drops share one policy and always use the bundled
+    backend. Mixed model/animation and instance containers are rejected before
+    scene mutation rather than guessing which existing skeleton to animate.
+    """
+    path = _validate_cast_path(path, "CAST")
+    contents = _cast_content_counts(path)
+    if contents["instances"]:
+        raise RuntimeError("CAST instance scenes are not supported by this safe importer")
+    if contents["models"] and contents["animations"]:
+        raise RuntimeError("Import model-only and animation-only CAST files separately; mixed containers are not supported")
+    if contents["models"]:
+        report = _import_isolated_cast_models(path, namespace)
+    elif contents["animations"]:
+        if cmds.ls(DUAL_STATE_NODE, type="network"):
+            _read_dual_state()
+            lowered = os.path.basename(path).lower()
+            filename_side = ("left" if "_akimbo_l_" in lowered else
+                             "right" if "_akimbo_r_" in lowered else None)
+            signature_side, scores = _dual_animation_side_signature(path)
+            if filename_side and signature_side and filename_side != signature_side:
+                log("WARNING dropped animation filename indicates %s while track signature suggests %s "
+                    "(left score %d, right score %d); using the explicit filename"
+                    % (filename_side, signature_side, scores["left"], scores["right"]))
+            side = filename_side or signature_side
+            if side is None:
+                raise RuntimeError("Unable to infer left/right from either the filename or the animation track signature")
+            report = replace_dual_animation(side, path)
+            report.update(kind="animation", side=side)
+        else:
+            state, reason = _animation_drop_attachment_state()
+            if state != "valid":
+                raise RuntimeError("A valid toolkit attachment is required before importing animation: %s" % reason)
+            report = _import_dropped_animation(path)
+            report["kind"] = "animation"
+    else:
+        raise RuntimeError("CAST file contains no supported models or animation")
+    report["backend"] = _cast_backend().info()
+    return report
 
 
 def _local_path_from_drop_url(value):
@@ -3997,7 +4206,7 @@ def _animation_drop_attachment_state(
 
 
 def _report_drop_error(path, message):
-    text = "Safe CAST animation drop rejected for %s: %s" % (
+    text = "Built-in CAST import rejected for %s: %s" % (
         os.path.basename(path), message)
     log(text)
     try:
@@ -4042,102 +4251,31 @@ def handle_external_cast_drop(data, do_drop):
         return default
 
     paths = _external_drop_paths(data)
+    cast_paths = [path for path in paths
+                  if os.path.splitext(path)[1].lower() == ".cast"]
+    if not cast_paths:
+        return default
     if len(paths) != 1:
-        return default
-    path = paths[0]
-    if os.path.splitext(path)[1].lower() != ".cast" or not os.path.isfile(path):
-        return default
-
-    try:
-        contents = _cast_content_counts(path)
-    except Exception as exc:
-        try:
-            attachment_evidence = _has_attachment_drop_evidence()
-        except Exception as evidence_exc:
-            _report_drop_error(
-                path,
-                "Unable to inspect CAST or validate the current scene (%s; %s)"
-                % (exc, evidence_exc),
-            )
-            return OpenMayaUI.MExternalDropCallback.kNoMayaDefaultAndNoAccept
-        if attachment_evidence:
-            _report_drop_error(path, "Unable to inspect CAST contents: %s" % exc)
-            return OpenMayaUI.MExternalDropCallback.kNoMayaDefaultAndNoAccept
-        log("unable to inspect dropped CAST; using Maya default: %s" % exc)
-        return default
-    if contents["animations"] < 1 or contents["models"]:
-        return default
-
-    dual_state_nodes = cmds.ls(DUAL_STATE_NODE, type="network") or []
-    dual_scene = bool(dual_state_nodes)
-    if dual_scene:
-        try:
-            _read_dual_state()
-        except Exception as exc:
-            _report_drop_error(
-                path, "Current dual-wield metadata is invalid: %s" % exc)
-            return OpenMayaUI.MExternalDropCallback.kNoMayaDefaultAndNoAccept
-    if dual_scene:
-        lowered = os.path.basename(path).lower()
-        if "_akimbo_l_" in lowered:
-            filename_side = "left"
-        elif "_akimbo_r_" in lowered:
-            filename_side = "right"
-        else:
-            filename_side = None
-        try:
-            signature_side, signature_scores = \
-                _dual_animation_side_signature(path)
-        except Exception as exc:
-            _report_drop_error(
-                path, "Unable to identify the Akimbo track side: %s" % exc)
-            return OpenMayaUI.MExternalDropCallback.kNoMayaDefaultAndNoAccept
-        if (filename_side and signature_side
-                and filename_side != signature_side):
-            log(
-                "WARNING dropped animation filename indicates %s while "
-                "track signature suggests %s (left score %d, right score %d); "
-                "using the explicit filename"
-                % (filename_side, signature_side,
-                   signature_scores["left"], signature_scores["right"]))
-        side = filename_side or signature_side
-        if side is None:
-            _report_drop_error(
-                path,
-                "Unable to infer left/right from either the filename or "
-                "the animation track signature",
-            )
-            return OpenMayaUI.MExternalDropCallback.kNoMayaDefaultAndNoAccept
-        try:
-            report = replace_dual_animation(side, path)
-        except Exception as exc:
-            _report_drop_error(path, str(exc))
-            log(traceback.format_exc())
-            return OpenMayaUI.MExternalDropCallback.kNoMayaDefaultAndNoAccept
-        log("safe dual CAST drop replaced %s animation (%d curves)" % (
-            side, report["anim_curve_count"]))
-        return OpenMayaUI.MExternalDropCallback.kNoMayaDefaultAndAccept
-
-    state, reason = _animation_drop_attachment_state()
-    if state == "absent":
-        return default
-    if state == "invalid":
-        _report_drop_error(path, reason)
+        _report_drop_error(cast_paths[0], "Drop one CAST file at a time; use the toolkit batch tools for queues")
         return OpenMayaUI.MExternalDropCallback.kNoMayaDefaultAndNoAccept
-
+    path = cast_paths[0]
     try:
-        report = _import_dropped_animation(path)
+        report = import_cast_file(path)
     except Exception as exc:
         _report_drop_error(path, str(exc))
         log(traceback.format_exc())
         return OpenMayaUI.MExternalDropCallback.kNoMayaDefaultAndNoAccept
 
-    log("safe CAST drop imported %s (%d curves, frames %s-%s)" % (
-        path,
-        report["anim_curve_count"],
-        report["playback_range"][0],
-        report["playback_range"][1],
-    ))
+    if report["kind"] == "model":
+        log("built-in CAST drop imported model %s into %s (%d nodes)" % (
+            path, report["namespace"], report["new_node_count"]))
+    elif report.get("side"):
+        log("safe dual CAST drop replaced %s animation (%d curves)" % (
+            report["side"], report["anim_curve_count"]))
+    else:
+        log("safe CAST drop imported %s (%d curves, frames %s-%s)" % (
+            path, report["anim_curve_count"],
+            report["playback_range"][0], report["playback_range"][1]))
     return OpenMayaUI.MExternalDropCallback.kNoMayaDefaultAndAccept
 
 
@@ -4180,7 +4318,8 @@ def _refresh_persisted_dual_manifest(state, validation):
         json.dump(payload, stream, ensure_ascii=False, indent=2, sort_keys=True)
 
 
-def save_current_result():
+def save_current_result(options=None):
+    """Save allocated outputs, or allocate the current selection on first save."""
     global _LAST_RESULT
 
     if not _LAST_RESULT:
@@ -4235,16 +4374,35 @@ def save_current_result():
         "smd": bool(_LAST_RESULT.output_smd),
         "fbx": bool(_LAST_RESULT.output_fbx),
     }
-    options = AttachOptions(
-        output_dir=os.path.dirname(_LAST_RESULT.output_manifest),
-        source_joint=_LAST_RESULT.source_joint_name,
-        target_joint=_LAST_RESULT.target_joint_name,
-        save_scene=bool(requested.get("ma")),
-        export_cast=bool(requested.get("cast")),
-        export_smd=bool(requested.get("smd")),
-        export_fbx=bool(requested.get("fbx")),
-        output_unit="m" if _LAST_RESULT.unit_conversion.get("output_unit") == "m" else "original",
-    )
+    first_save = not _LAST_RESULT.output_manifest
+    if first_save:
+        if options is None:
+            if cmds.window(DUAL_WINDOW_NAME, exists=True):
+                options = _dual_dialog_options()
+            elif cmds.window(WINDOW_NAME, exists=True):
+                options = _dialog_options()
+            else:
+                options = load_saved_options()
+        validate_output_options(options)
+        _allocate_result_output_paths(_LAST_RESULT, options.output_dir, options)
+        if isinstance(_LAST_RESULT, DualWieldResult):
+            state_node, state = _read_dual_state()
+            for name in ("output_scene", "output_cast", "output_smd",
+                         "output_fbx", "output_manifest"):
+                state[name] = getattr(_LAST_RESULT, name)
+            state["requested_outputs"] = dict(_LAST_RESULT.requested_outputs)
+            _write_dual_state(state_node, state)
+    else:
+        options = AttachOptions(
+            output_dir=os.path.dirname(_LAST_RESULT.output_manifest),
+            source_joint=_LAST_RESULT.source_joint_name,
+            target_joint=_LAST_RESULT.target_joint_name,
+            save_scene=bool(requested.get("ma")),
+            export_cast=bool(requested.get("cast")),
+            export_smd=bool(requested.get("smd")),
+            export_fbx=bool(requested.get("fbx")),
+            output_unit="m" if _LAST_RESULT.unit_conversion.get("output_unit") == "m" else "original",
+        )
     _write_result_outputs(_LAST_RESULT, options, allocate=False)
     if _LAST_RESULT.output_errors:
         raise RuntimeError("Some animation outputs failed: %s" % _LAST_RESULT.output_errors)
@@ -4404,7 +4562,9 @@ def _ui_output_options(saved, batch=False, dual=False):
         _ui_path_row("Manifest/default:", OUTPUT_DIR_FIELD, saved.output_dir,
                      lambda *_: _browse_output_dir(
                          OUTPUT_DIR_FIELD, "manifest/default output"))
-        _ui_text("Select at least one format. Blank folders use the default folder.")
+        _ui_text("Select at least one format. Blank folders use the default folder."
+                 if batch else
+                 "Optional: leave all formats off to keep only the scene. Blank folders use the default folder.")
         records = (
             (EXPORT_MA_CHECK, "Maya ASCII scene + animation (.ma)" if dual or batch
              else "Maya ASCII scene (.ma)", saved.save_scene,
@@ -4441,7 +4601,7 @@ def _ui_output_options(saved, batch=False, dual=False):
         if batch:
             _ui_text("SMD stores skeletal animation only; use the JSON report for its frame rate.")
         else:
-            _ui_text("CAST, SMD and FBX here export static models. Use Animation Batch for animated exports.")
+            _ui_text("CAST, SMD and FBX here export static models. Use standalone FBX/SMD or Animation Batch for animated exports.")
 
 
 def _ui_create_dialog(name, title, batch):
@@ -4721,11 +4881,9 @@ def _preflight_from_dialog():
     try:
         viewhands, weapon = _require_dialog_paths(require_weapon=True)
         options = _dialog_options()
-        formats = validate_output_options(options)
+        formats = validate_output_options(options, require_output=False)
         output_dirs = resolved_output_directories(options)
-        output_lines = [
-            "  JSON: %s" % output_dirs["manifest"],
-        ]
+        output_lines = ["  JSON: %s" % output_dirs["manifest"]] if formats else []
         for key, label in (
                 ("scene", "MA"),
                 ("cast", "Cast"),
@@ -4752,7 +4910,7 @@ def _preflight_from_dialog():
                      "  Unused source vertices: %d\n"
                      "Weapon: %d bones, %d meshes, match %s\n"
                      "  Unused source vertices: %d\n\n"
-                     "Outputs: %s + JSON manifest\n%s\n"
+                     "Outputs: %s\n%s\n"
                      "This dialog builds the single-weapon workflow."
                      % (
                          report["mapping"],
@@ -4764,7 +4922,8 @@ def _preflight_from_dialog():
                          report["weapon"]["mesh_count"],
                          report["weapon"]["match"],
                          report["weapon"]["unused_vertex_count"],
-                         ", ".join("." + value for value in formats),
+                         (", ".join("." + value for value in formats) + " + JSON manifest"
+                          if formats else "Scene only (no files)"),
                          "\n".join(output_lines),
                      )),
             button=["OK"],
@@ -4778,7 +4937,8 @@ def _attachment_finished(result):
     """Keep completion non-modal, but never hide partial export failures."""
     if result.output_errors:
         raise RuntimeError("Some animation outputs failed: %s" % result.output_errors)
-    message = "Attachment complete. Manifest: %s" % result.output_manifest
+    message = ("Attachment complete. Manifest: %s" % result.output_manifest
+               if result.output_manifest else "Attachment complete. Scene only (no files).")
     log(message)
     if cmds.control(_UI_FEEDBACK_CONTROL, exists=True):
         cmds.text(_UI_FEEDBACK_CONTROL, edit=True, label=message)
@@ -4788,7 +4948,7 @@ def _run_from_dialog():
     try:
         viewhands, weapon = _require_dialog_paths(require_weapon=True)
         options = _dialog_options(force_new_scene=True)
-        validate_output_options(options)
+        validate_output_options(options, require_output=False)
         save_options(viewhands, options)
         if not _confirm_scene_reset():
             return
@@ -4895,13 +5055,30 @@ def quick_attach():
         return
     try:
         options = load_saved_options(force_new_scene=True)
-        validate_output_options(options)
+        validate_output_options(options, require_output=False)
         if not _confirm_scene_reset():
             return
         attached = attach_gun(viewhands, result[0], options)
         _attachment_finished(attached)
     except Exception as exc:
         _show_error("%s - Quick Attach" % PRODUCT_SHORT_NAME, exc)
+
+
+def _import_cast_ui():
+    """Choose one CAST; policy and implementation belong to import_cast_file."""
+    try:
+        paths = cmds.fileDialog2(fileMode=1, fileFilter="Cast (*.cast)",
+                                 dialogStyle=2, okCaption="Select",
+                                 caption="Import CAST...") or []
+        if not paths:
+            return
+        report = import_cast_file(paths[0])
+        message = "Built-in CAST imported: %s (%s)" % (paths[0], report["kind"])
+        log(message)
+        if cmds.control(_UI_FEEDBACK_CONTROL, exists=True):
+            cmds.text(_UI_FEEDBACK_CONTROL, edit=True, label=message)
+    except Exception as exc:
+        _show_error("%s - CAST Import" % PRODUCT_SHORT_NAME, exc)
 
 
 def import_animation():
@@ -4977,6 +5154,104 @@ def _save_current_ui():
         )
     except Exception as exc:
         _show_error("%s - Save Result" % PRODUCT_SHORT_NAME, exc)
+
+
+def _browse_export_file(field, file_format):
+    """Pick a destination without creating files or changing the scene."""
+    kwargs = dict(
+        fileMode=0, fileFilter="%s (*.%s)" % (file_format.upper(), file_format),
+        dialogStyle=2, okCaption="Select",
+        caption="Export %s..." % file_format.upper(),
+    )
+    current = _field_text(field)
+    if current and os.path.isdir(os.path.dirname(current)):
+        kwargs["startingDirectory"] = os.path.dirname(current)
+    try:
+        selected = cmds.fileDialog2(**kwargs) or []
+        if selected:
+            cmds.textField(field, edit=True, text=selected[0])
+    except Exception as exc:
+        _show_error("%s - File Browser" % PRODUCT_SHORT_NAME, exc)
+
+
+def _export_from_dialog(file_format, controls):
+    """The dialog supplies export intent; the exporter owns copies and writers."""
+    try:
+        path = cmds.textField(controls["path"], query=True, text=True).strip()
+        if not path:
+            raise RuntimeError("Choose an export file path first")
+        animated = cmds.optionMenu(controls["mode"], query=True, select=True) == 2
+        frame_range = None
+        if animated:
+            frame_range = (
+                cmds.intFieldGrp(controls["frames"], query=True, value1=True),
+                cmds.intFieldGrp(controls["frames"], query=True, value2=True),
+            )
+        output_unit = ("m" if cmds.optionMenu(
+            controls["unit"], query=True, select=True) == 2 else "original")
+        report = _exports_module().export_file(
+            _core_runtime(), path, file_format,
+            animated=animated, frame_range=frame_range, output_unit=output_unit,
+        )
+        message = "Export complete: %s" % report["path"]
+        log(message)
+        if cmds.control(controls["status"], exists=True):
+            cmds.text(controls["status"], edit=True, label=message)
+    except Exception as exc:
+        _show_error("%s - Export %s" % (PRODUCT_SHORT_NAME, file_format.upper()), exc)
+
+
+def show_export_dialog(file_format):
+    """Export the current scene as a static model or an explicit animation."""
+    if file_format not in ("fbx", "smd"):
+        raise RuntimeError("Standalone export format must be fbx or smd")
+    prefix = "codViewmodelExport" + file_format.upper()
+    window = prefix + "Window"
+    if cmds.window(window, exists=True):
+        cmds.deleteUI(window)
+    cmds.window(window, title="%s - Export %s" % (
+        PRODUCT_SHORT_NAME, file_format.upper()), widthHeight=(620, 380), sizeable=True)
+    cmds.columnLayout(adjustableColumn=True, rowSpacing=10,
+                      columnAttach=("both", 12))
+    cmds.text(label="Export current scene without rebuilding the attachment.",
+              align="left", wordWrap=True)
+    if file_format == "smd":
+        cmds.text(label="Static SMD requires a toolkit attachment. Animated SMD contains skeletal frames only.",
+                  align="left", wordWrap=True)
+    cmds.text(label="Export file:", align="left")
+    cmds.rowLayout(numberOfColumns=2, adjustableColumn=1,
+                   columnWidth2=(1, 100), columnAttach2=("both", "both"))
+    path = cmds.textField(prefix + "Path", text="", height=32)
+    cmds.button(label="Browse...", height=32,
+                command=lambda *_: _browse_export_file(path, file_format))
+    cmds.setParent("..")
+    cmds.text(label="Export mode:", align="left")
+    mode = cmds.optionMenu(prefix + "Mode", height=32)
+    cmds.menuItem(label="Static model")
+    cmds.menuItem(label="Current animation")
+    frames = cmds.intFieldGrp(
+        prefix + "Frames", numberOfFields=2, label="Frames:",
+        value1=int(cmds.playbackOptions(query=True, minTime=True)),
+        value2=int(cmds.playbackOptions(query=True, maxTime=True)),
+        enable=False,
+    )
+    cmds.optionMenu(mode, edit=True, changeCommand=lambda *_: cmds.intFieldGrp(
+        frames, edit=True, enable=cmds.optionMenu(mode, query=True, select=True) == 2))
+    cmds.text(label="Output unit:", align="left")
+    unit = cmds.optionMenu(prefix + "Unit", height=32)
+    cmds.menuItem(label="Keep original")
+    cmds.menuItem(label="Meters (input: ft)")
+    cmds.text(label="Meters converts an export copy: 1 ft = 0.3048 m. The working scene is unchanged.",
+              align="left", wordWrap=True)
+    status = cmds.text(prefix + "Status", label="Ready", align="left", wordWrap=True)
+    controls = {"path": path, "mode": mode, "frames": frames,
+                "unit": unit, "status": status}
+    cmds.button(label="Export", height=34,
+                command=lambda *_: _export_from_dialog(file_format, controls))
+    cmds.button(label="Close", height=32,
+                command=lambda *_: cmds.deleteUI(window))
+    cmds.showWindow(window)
+    return window
 
 
 def _open_output_dir_ui():
@@ -5114,7 +5389,7 @@ def _run_dual_from_dialog():
     try:
         paths = _dual_dialog_paths()
         options = _dual_dialog_options(force_new_scene=True)
-        validate_output_options(options)
+        validate_output_options(options, require_output=False)
         _save_dual_dialog_settings(paths, options)
         if not _confirm_scene_reset():
             return
@@ -5471,7 +5746,7 @@ def _install_cast_drop_callback():
         callback = CastDropCallback()
         OpenMayaUI.MExternalDropCallback.addCallback(callback, 0)
         _CAST_DROP_CALLBACK = callback
-        log("registered safe external CAST animation drop callback")
+        log("registered built-in external CAST import drop callback")
     return _CAST_DROP_CALLBACK
 
 
@@ -5522,10 +5797,11 @@ def _about_message():
         "- Pure-animation CAST import and drag/drop safely avoid "
         "duplicate-joint\n"
         "  conflicts.\n\n"
+        "- Import CAST: isolated models and safe animation, without an external plugin.\n\n"
         "ANIMATION & EXPORT\n"
         "- Queue multiple single clips or explicit left/right dual pairs.\n"
-        "- Builders: animated MA scenes plus optional static CAST/SMD/FBX\n"
-        "  model outputs.\n"
+        "- Builders: scene-only by default; optional MA/CAST/SMD/FBX outputs.\n"
+        "- Standalone FBX/SMD: choose a static model or the current animation.\n"
         "- Animation batches: animated MA/CAST/FBX and skeletal-animation "
         "SMD;\n"
         "  all use DQS skinning.\n"
@@ -5579,12 +5855,19 @@ def create_menu():
     cmds.menuItem(label="Dual Animation Batch...",
                   command=lambda *_: show_dual_dialog(batch=True))
     cmds.menuItem(divider=True)
+    cmds.menuItem(label="Export FBX...",
+                  command=lambda *_: show_export_dialog("fbx"))
+    cmds.menuItem(label="Export SMD...",
+                  command=lambda *_: show_export_dialog("smd"))
+    cmds.menuItem(divider=True)
+    cmds.menuItem(label="Import CAST...",
+                  annotation="Import isolated models or safely animate a toolkit assembly using the built-in backend.",
+                  command=lambda *_: _import_cast_ui())
     cmds.menuItem(label="Import Animation Safely...",
                   command=lambda *_: import_animation())
     cmds.menuItem(
-        label="Auto-Safe Dropped CAST Animations",
-        annotation=("Safely route pure animation CAST files dropped onto "
-                    "a CoD Viewmodel Toolkit scene."),
+        label="Built-in CAST Drag and Drop",
+        annotation="Import supported CAST drops with the built-in backend; never fall back after a rejected import.",
         checkBox=auto_safe_drop_enabled(),
         command=lambda enabled, *_: set_auto_safe_drop_enabled(enabled),
     )
@@ -5658,10 +5941,10 @@ def initializePlugin(m_object):
 def uninitializePlugin(m_object):
     plugin = OpenMayaMPx.MFnPlugin(m_object)
     _remove_cast_drop_callback()
-    if cmds.window(WINDOW_NAME, exists=True):
-        cmds.deleteUI(WINDOW_NAME)
-    if cmds.window(DUAL_WINDOW_NAME, exists=True):
-        cmds.deleteUI(DUAL_WINDOW_NAME)
+    for window in (WINDOW_NAME, DUAL_WINDOW_NAME,
+                   "codViewmodelExportFBXWindow", "codViewmodelExportSMDWindow"):
+        if cmds.window(window, exists=True):
+            cmds.deleteUI(window)
     remove_menu()
     _cast_backend().unregister(plugin)
     for command_name in (LEGACY_COMMAND_NAME, COMMAND_NAME):

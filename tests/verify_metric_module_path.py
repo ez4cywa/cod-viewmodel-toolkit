@@ -74,6 +74,7 @@ def verify_export(namespace, folder, animated):
     document.save(str(hands))
     make_animation(core, clip, 3, [("j_gun", "tx", 0, 10, "absolute")])
     options = core.AttachOptions(output_dir=str(folder / mode), force_new_scene=True,
+                                 save_scene=True, export_cast=True,
                                  output_unit="m", export_animation=animated)
     result = namespace["_build_single_attachment"](str(hands), str(weapon), options)
     if animated:

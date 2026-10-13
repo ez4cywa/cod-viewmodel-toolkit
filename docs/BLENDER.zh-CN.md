@@ -1,9 +1,10 @@
-# Blender — CoD Viewmodel Toolkit 3.5.1
+# Blender — CoD Viewmodel Toolkit 3.6.0
 
 ## 简体中文安装包
 
-3.5.1 提供 `cod-viewmodel-toolkit-3.5.1-blender-zh-CN.zip`。本版米制导出修复针对 Maya，
-构建与中文转换检查覆盖两个平台。
+3.6.0 提供 `cod-viewmodel-toolkit-3.6.0-blender-zh-CN.zip`。本版四项输出默认关闭与
+独立 FBX／SMD 菜单仅针对 Maya，Blender 输出默认行为不变；构建与中文转换检查
+覆盖两个平台。
 Blender 保留项目补丁版 CAST 2.00 后端及原有导入／导出算法，仅同步安装包版本，
 没有新增 Blender 功能。中文包翻译插件面板、
 按钮、字段、工具提示和常用操作反馈，不修改 Blender 全局语言。侧栏标签仍为
@@ -12,7 +13,7 @@ Blender 保留项目补丁版 CAST 2.00 后端及原有导入／导出算法，�
 
 中英文包共用 `cod_viewmodel_toolkit` 模块。切换版本前先停止批处理、禁用旧版，
 通过“从磁盘安装”安装所需语言包并重新启用；不要将两份包改名后同时加载。
-中文包包含与英文 3.5.1 相同的米制输出功能。
+中文包包含与英文 3.6.0 相同的组装与导出功能。
 
 [English](BLENDER.md) · [项目首页](../README.zh-CN.md)
 
@@ -21,7 +22,7 @@ Blender 保留项目补丁版 CAST 2.00 后端及原有导入／导出算法，�
 
 ## 安装与使用
 
-1. 下载 `cod-viewmodel-toolkit-3.5.1-blender-zh-CN.zip`（中文）或 `cod-viewmodel-toolkit-3.5.1-blender-en.zip`（英文）。
+1. 下载 `cod-viewmodel-toolkit-3.6.0-blender-zh-CN.zip`（中文）或 `cod-viewmodel-toolkit-3.6.0-blender-en.zip`（英文）。
 2. 在 Blender 的 Edit > Preferences > Add-ons 菜单选择 Install from Disk，
    安装 ZIP，并启用 **CoD Viewmodel Toolkit**。
 3. 在 3D 视图按 `N`，打开 **Viewmodel** 标签。

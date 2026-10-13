@@ -1,7 +1,8 @@
-# Blender — CoD Viewmodel Toolkit 3.5.1
+# Blender — CoD Viewmodel Toolkit 3.6.0
 
-The 3.5.1 release also offers `cod-viewmodel-toolkit-3.5.1-blender-zh-CN.zip`.
-The metric-export fix targets Maya; release-build checks cover both hosts. Blender retains its patched
+The 3.6.0 release also offers `cod-viewmodel-toolkit-3.6.0-blender-zh-CN.zip`.
+The optional-output defaults and standalone FBX/SMD menu tools target Maya;
+Blender's output defaults are unchanged. Release-build checks cover both hosts. Blender retains its patched
 CAST 2.00 backend and existing import/export algorithms; its package version
 is synchronized, with no new Blender functionality.
 It localizes the add-on UI without changing Blender's language. English and
@@ -18,7 +19,7 @@ remains independent. No game assets, Blender executable or Maya runtime are bund
 
 ## Install
 
-1. Download `cod-viewmodel-toolkit-3.5.1-blender-en.zip` (English) or `cod-viewmodel-toolkit-3.5.1-blender-zh-CN.zip` (Simplified Chinese).
+1. Download `cod-viewmodel-toolkit-3.6.0-blender-en.zip` (English) or `cod-viewmodel-toolkit-3.6.0-blender-zh-CN.zip` (Simplified Chinese).
 2. In Blender, open Edit > Preferences > Add-ons > menu > Install from Disk.
    Select the ZIP as a legacy add-on and enable **CoD Viewmodel Toolkit**.
 3. In the 3D Viewport press `N`, then select **Viewmodel**.

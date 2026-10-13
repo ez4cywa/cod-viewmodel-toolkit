@@ -13,12 +13,16 @@ python tests/verify_source_contracts.py
 python tests/verify_vendored_cast.py
 python tests/verify_vendored_blender_cast.py
 python tests/verify_build_release.py
+python tests/verify_standalone_exports.py
+python tests/verify_standalone_export_ui.py
 ```
 
 - [ ] All source checks pass, including Maya runtime Python 3.7 syntax.
 - [ ] Build failure tests preserve existing packages and leave no newly
       published ZIPs; optimized Python still rejects mismatched versions.
 - [ ] English/Chinese versions, UI titles and transformations match.
+- [ ] Standalone FBX/SMD worker/publication and English/Chinese dialog contracts
+      pass, including worker cleanup and plugin-unload window cleanup.
 - [ ] Release notes, changelog and bilingual download links use the new tag.
 - [ ] No game assets, scene exports, preferences, credentials or personal
       paths are added to the repository.
@@ -37,6 +41,20 @@ test outcomes and any skipped interaction tests in the release notes.
       source-scene preservation and conversions.
 - [ ] For animation/backend changes: run the relevant private-backend,
       single/dual, drop, reference-pose and batch-export regressions.
+- [ ] For the CAST gateway: `mayapy tests/verify_cast_import_gateway.py`
+      verifies private-only imports, real fresh model namespaces/material
+      isolation, single/dual routing, rejection of unsupported or ambiguous
+      inputs, and no fallback for rejected CAST drops. Record the exact entry
+      paths tested; ordinary Maya File Import is not gateway coverage.
+- [ ] For output-default changes: `mayapy tests/verify_optional_outputs.py`
+      checks all-off single/dual/quick builds, preference migration, first save
+      and rejecting a batch with no selected format.
+- [ ] For standalone exports: `mayapy tests/verify_standalone_export_host.py`
+      checks both modes, ordinary-scene support, unit conversion, destination
+      contents and preservation of live scene state. Repeat with
+      `--plugin <entry-path>` for each relevant release or installed entry.
+- [ ] Record backend callback/headless animation checks separately from native
+      GUI interaction; do not describe a skipped GUI run as accepted.
 - [ ] Blender: run applicable assembly, animation and unit tests in Blender
       5.2+; the project's recorded test host is Windows Blender 5.2.1 LTS.
 - [ ] Distinguish Python 3.7 syntax compatibility (Maya 2022 target) and older
@@ -51,7 +69,8 @@ python scripts/build_release.py <new-output-directory>
 - [ ] The fresh directory contains four platform/language ZIPs. For a
       supplemental Chinese Blender package, use `--blender-zh-only`.
 - [ ] Maya packages contain the private `plug-ins/cod_viewmodel_cast` folder
-      and adjacent loader; no top-level CAST runtime files are distributed.
+      and adjacent loader, unit helper and `cod_viewmodel_exports.py`; no
+      top-level CAST runtime files are distributed.
 - [ ] All packages include licenses and notices; exclude `cast.cfg`, obsolete
       options files, bytecode, game assets and user preferences.
 - [ ] Expand each Maya package into a disposable directory, then run

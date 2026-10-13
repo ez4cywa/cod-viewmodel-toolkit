@@ -14,7 +14,7 @@ CAST_MODULE_SHA256 = (
     "d1ff7fcb2a184f208b21be34485d1863834ae33811078a28a2ccf6ff61f2c577"
 )
 CAST_PLUGIN_SHA256 = (
-    "ec6a625e0dab48af5b244a010a78962932cc6a32a5ee5d00ef5a2b4c98f90513"
+    "4d1774f51343078d6e36efb2eeea55b800f368b3a3b2576b614635003945a65d"
 )
 
 
@@ -46,6 +46,8 @@ def main():
         'version = "2.01"',
         'def utilityOperationOptions(options=None, runtime=None):',
         'def utilityAnimationTargets(targets=None):',
+        'def utilityNamespaceName(name):',
+        'def utilityNewShadingNode(nodeType, name=None, **options):',
         'type=fileTranslatorName',
         "def utilityApplyTranslatorOptions(optionString, supportedNames):",
         'if cmds.about(batch=True):',

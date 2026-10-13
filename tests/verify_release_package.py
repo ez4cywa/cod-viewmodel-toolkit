@@ -30,6 +30,7 @@ def main(package, edition):
     cast_dir = plugin_dir / "cod_viewmodel_cast"
     assert (plugin_dir / "cod_viewmodel_units.py").is_file()
     assert (plugin_dir / "cod_viewmodel_cast_backend.py").is_file()
+    assert (plugin_dir / "cod_viewmodel_exports.py").is_file()
     assert not (plugin_dir / "cast.py").exists()
     assert not (plugin_dir / "castplugin.py").exists()
     assert (package / "docs/OUTPUT_UNITS.md").is_file()
@@ -55,7 +56,7 @@ def main(package, edition):
                           if edition == "zh-CN" else "viewmodel_weapon_toolkit.py")
     plugin_name = entry.stem
     cmds.loadPlugin(str(entry), quiet=True)
-    assert str(cmds.pluginInfo(plugin_name, query=True, version=True)) == "3.5.1"
+    assert str(cmds.pluginInfo(plugin_name, query=True, version=True)) == "3.6.0"
     assert hasattr(cmds, "viewmodelWeaponToolkit") and hasattr(cmds, "attachGun")
     # GUI and batch share the same private translator and serializer package.
     import sys

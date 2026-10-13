@@ -23,7 +23,8 @@
    `castplugin.py`、`cast.py` 和 `cast.cfg`；工具包不再覆盖这些文件。
 2. 选择一个 Release 版本，把其中 `plug-ins` 的全部文件和子目录复制到 Maya
    的 `MAYA_PLUG_IN_PATH` 目录。两个版本均包含 `cod_viewmodel_cast_backend.py`、
-   `cod_viewmodel_cast/{cast.py,castplugin.py}`、`cod_viewmodel_units.py` 及工具包入口：
+   `cod_viewmodel_cast/{cast.py,castplugin.py}`、`cod_viewmodel_units.py`、
+   `cod_viewmodel_exports.py` 及工具包入口：
    - 英文版：`viewmodel_weapon_toolkit.py`。
    - 简体中文版：同时复制 `viewmodel_weapon_toolkit.py` 和
      `viewmodel_weapon_toolkit_zh_CN.py`；前者是共享核心。
@@ -57,6 +58,31 @@ CAST 2.01 修复变换组下骨架导出的父索引。本项目另修复多条�
 最后一条的问题，保留平移、旋转、缩放各自的启用标志。这些属于正确性修复，
 不计作性能收益。详见 [3.5.0 更新说明](RELEASE_NOTES_3.5.0.md)、
 [后端研究](CAST_BACKEND_RESEARCH.md)和[测量记录](CAST_BACKEND_BENCHMARK.md)。
+
+## 无需另装插件导入 CAST
+
+使用 **CoD 视角模型工具包 → 导入 CAST…**，或在启用 **内置 CAST 拖入处理** 时
+向 Maya 拖入一个 `.cast` 文件。两条路径都使用内置后端，无需外部 `castplugin.py`。
+拖放设置默认开启，沿用原偏好键及已保存选择。
+
+| 输入 | 行为 | 前提 |
+| --- | --- | --- |
+| 纯模型 CAST | 模型、骨骼和材质进入新命名空间 `cast_import`、`cast_import1` 等；不自动挂载、不清零骨骼。 | 无需工具包组装。 |
+| 纯动画 CAST | 沿用单武器／双持安全动画接口；双持通过 `_akimbo_l_`／`_akimbo_r_` 文件名或轨道特征识别侧别。 | 已有有效工具包组装，不在普通骨架中猜测目标。 |
+| 模型／动画混合容器或 Instance 容器 | 导入内容前明确拒绝。 | 请分别提供纯模型与纯动画文件。 |
+
+原 CAST 文件不会被修改。模型导入保留场景中已有节点与材质，不复用它们的同名
+对象。需要挂载手臂与武器时，在单武器／双持构建器中选择原模型路径；普通模型
+导入不是挂载操作。
+
+内置拖放开启时，不支持、损坏或多文件 CAST 拖放不会转交其他转换器。请一次
+拖入一个文件，队列任务使用批量工具。关闭该设置后，Maya 恢复默认拖放处理；
+菜单的“导入 CAST…”仍使用内置后端。
+
+**Maya 普通“文件 → 导入”不会被重定向。** 直接使用外部 `Cast` 转换器仍可能
+将动画误写到同名 `j_gun`。请使用工具包导入入口、单武器的 **安全导入动画…**，
+或双持窗口明确的左／右动画替换按钮。无法识别双持片段侧别时，请改用对应侧
+的替换按钮。
 
 ## 骨骼约定
 
@@ -94,8 +120,13 @@ CAST 2.01 修复变换组下骨架导出的父索引。本项目另修复多条�
 
 ## 输出说明
 
-原有构建器保持原行为：`.ma` 保存场景与动画，`.cast`、`.smd`、`.fbx` 输出静态模型。
-新增的 **单武器动画批量导出** 和 **双持动画批量导出** 则为每个勾选的格式输出动画：
+单武器、双持与快速挂载的 MA、CAST、FBX、SMD **默认全部关闭**。四项都未勾选时
+只组装当前场景，不创建输出目录、导出文件或 JSON 报告，也不启动米制导出进程。
+首次读取旧版保存设置时，一次性迁移仅重置这四个勾选项；路径、骨骼映射和其他
+设置保留。之后会记住用户明确选择的输出格式。
+
+构建器启用 `.ma` 时仍保存场景与动画，启用 `.cast`、`.smd` 或 `.fbx` 时仍输出
+静态模型。**单武器动画批量导出** 和 **双持动画批量导出** 为每个勾选格式输出动画：
 
 | 格式 | 批量导出的内容 |
 | --- | --- |
@@ -111,12 +142,30 @@ CAST 2.01 修复变换组下骨架导出的父索引。本项目另修复多条�
 
 SMD v1 不保存帧率、缩放或剪切。帧率写入 JSON 清单，目标软件需据此设置。
 如关节包含非单位缩放或剪切，该 SMD 输出会明确报错，但不影响其他勾选格式。
-SMD 位移采用厘米，旋转采用 XYZ 欧拉角、弧度单位。
+SMD 位移默认采用厘米（显式选择米制输出时采用米），旋转采用 XYZ 欧拉角、弧度单位。
 
-四种格式均可关闭，也可以分别指定输出目录。工具不会覆盖已有文件，而是
-自动追加 `_v001` 一类版本后缀。
+每种启用格式可以分别指定输出目录。工具不会覆盖已有文件，而是自动追加
+`_v001` 一类版本后缀。第一次只挂载后，在构建器中选择至少一种格式与目录，
+再使用 **保存当前结果**，即可首次输出，无需重新挂载。Python 接口可使用
+`save_current_result(AttachOptions(save_scene=True))`。
 
 挂载成功仍不弹完成提示；错误、部分格式导出失败和未保存场景提示继续保留。
+
+### 从当前场景单独导出 FBX 或 SMD
+
+从菜单打开 **单独导出 FBX…** 或 **单独导出 SMD…**，无需重新挂载，也不依赖
+构建器的输出勾选项。指定文件名，明确选择“静态模型”或“当前动画”，再选择
+“保持原单位”或“米（输入：英尺）”。动画模式要求起点不小于零、终点不早于
+起点的整数帧范围，初始值来自当前播放区间。SMD 动画从第 0 帧开始，仅含骨骼帧。
+
+- FBX 可导出普通模型场景或工具包组装。
+- 静态 SMD 需要有效工具包挂载，包含蒙皮三角网格。
+- 动画 SMD 可使用普通关节骨架，不包含网格。
+
+独立 `mayapy` 进程从临时场景副本导出。米制换算与动画 FBX 的 DQS 设置只作用于
+副本；工作场景的名称、修改状态、选择、当前帧、曲线和蒙皮设置保持不变。
+目标目录仅输出所选 FBX 或 SMD，不附带 MA、CAST 或 JSON 文件。已有文件自动
+添加版本后缀。成功状态显示在窗口内，报错继续保留。暂不提供 MAX 导出。
 
 ## 动画批量导出
 
@@ -137,7 +186,8 @@ SMD 位移采用厘米，旋转采用 XYZ 欧拉角、弧度单位。
 Python 接口：`batch_export_animations(hands, weapon, animation_paths, options)` 和
 `batch_export_dual_animations(hands, weapon, [(left, right), ...], options)`，分别使用
 `AttachOptions` 和 `DualWieldOptions`。四种格式开关及目录字段沿用现有配置；
-接口返回批次汇总字典，不改变原有构建器的静态导出默认行为。
+接口返回批次汇总字典。批量导出必须显式启用至少一种格式，例如
+`AttachOptions(save_scene=True)`；构建器默认的四项全关不能用于批量导出。
 
 ## 已知源数据警告
 
@@ -149,7 +199,7 @@ Python 接口：`batch_export_animations(hands, weapon, animation_paths, options
 | 支持级别 | 环境 | 状态 |
 | --- | --- | --- |
 | 预期最低版本 | Maya 2022、Python 3.7.7、私有补丁版 CAST 2.01 | Python 3.7 语法与 API 兼容性目标；未在 Maya 2022 执行完整宿主回归。 |
-| 当前验证版本 | Maya 2027、Python 3.13.9、私有补丁版 CAST 2.01、Windows | 3.5.1 米制导出与模块路径回归在此环境运行；3.5.0 后端验证记录保留。实际完成项目见更新说明。 |
+| 当前验证版本 | Maya 2027、Python 3.13.9、私有补丁版 CAST 2.01、Windows | 3.6.0 可选输出与独立导出检查通过；源码中英文入口各完成 8 项真实导出。安装入口动画检查采样 239 帧，本轮未验收原生 GUI 交互。 |
 | 历史验证版本 | Maya 2025、Python 3.11.4、此前内置 CAST 版本、Windows | 旧版验证过单武器、双持、中文界面和导出；3.5.0 未在此版本重新测试。 |
 
 Windows 或 Linux 版 Maya 2022 也可以用 Python 2 模式启动；本工具包必须在
@@ -173,12 +223,24 @@ mayapy tests/verify_cast_v201.py
 mayapy tests/verify_private_cast_backend.py
 mayapy tests/verify_animation_read_session.py
 mayapy tests/verify_maya_drop_module_path.py
+mayapy tests/verify_cast_import_gateway.py
+mayapy tests/verify_optional_outputs.py
+python tests/verify_standalone_exports.py
+python tests/verify_standalone_export_ui.py
+mayapy tests/verify_standalone_export_host.py
 ```
 
 批量回归会自动生成合成 CAST 样本，检查双持两种播放模式、四种输出及 FBX
 重新导入后的逐帧结果。公开仓库不包含游戏资产。
 具体覆盖范围见[批量导出验证记录](BATCH_ANIMATION_VERIFICATION.md)。
-本版检查见 [3.5.1 更新说明](RELEASE_NOTES_3.5.1.md)和[发布清单](RELEASE_CHECKLIST.md)；
+独立导出宿主测试使用合成模型，检查静态／动画输出、单位换算、防覆盖命名和
+工作场景保留，可用 `--plugin <入口路径>` 检查已安装的中英文或旧入口。
+可选输出测试覆盖单武器／双持／快速挂载的无磁盘输出、一次偏好迁移、首次保存，
+以及未选择格式时批量导出的拒绝行为。
+新增 CAST 导入入口已在 Maya 2027 的源码、安装版中文入口及中文安装包通过回归。
+测试检查模型与材质命名空间隔离、单武器／双持安全匹配、不支持输入的拒绝、
+失败清理，以及不依赖外部 CAST 插件；完整验证范围见更新说明。
+本版检查见 [3.6.0 更新说明](RELEASE_NOTES_3.6.0.md)和[发布清单](RELEASE_CHECKLIST.md)；
 此前的[后端测量记录](CAST_BACKEND_BENCHMARK.md)保留。CAST 2.00 与原生界面历史检查见
 [3.2.0 验证记录](VERIFICATION_3.2.0.md)。
 

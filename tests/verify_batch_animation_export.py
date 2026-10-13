@@ -204,6 +204,7 @@ def run(directory):
     one_frame_options = module.DualWieldOptions(
         output_dir=str(directory / "one_frame"),
         force_new_scene=True,
+        export_cast=True,
         export_smd=True,
         export_fbx=True,
         export_animation=True,
@@ -237,7 +238,7 @@ def run(directory):
     assert tuple(legacy_validation["playback_range"]) == (-1.0, 0.0)
     options = module.AttachOptions(
         output_dir=str(directory / "single"), force_new_scene=True,
-        export_smd=True, export_fbx=True,
+        save_scene=True, export_cast=True, export_smd=True, export_fbx=True,
         ma_output_dir=str(directory / "ma"), cast_output_dir=str(directory / "cast"),
         smd_output_dir=str(directory / "smd"), fbx_output_dir=str(directory / "fbx"))
     summary = module.batch_export_animations(str(hands), str(weapon),
@@ -256,6 +257,7 @@ def run(directory):
     for mode in ("simultaneous", "sequential"):
         dual_options = module.DualWieldOptions(
             output_dir=str(directory / mode), force_new_scene=True,
+            save_scene=True, export_cast=True,
             export_smd=True, export_fbx=True, animation_mode=mode)
         result = module.batch_export_dual_animations(
             str(hands), str(weapon), [(str(left), str(right)), (str(left2), str(right))], dual_options)
@@ -283,7 +285,8 @@ def run(directory):
     module.export_smd_animation = fail_smd
     try:
         partial_options = module.AttachOptions(output_dir=str(directory / "partial"),
-                                               export_cast=False, export_smd=True, force_new_scene=True)
+                                               save_scene=True, export_cast=False,
+                                               export_smd=True, force_new_scene=True)
         partial = module.batch_export_animations(str(hands), str(weapon), [str(clip_b)], partial_options)
         item = partial["items"][0]
         assert item["status"] == "partial" and set(item["outputs"]) == {"scene"}

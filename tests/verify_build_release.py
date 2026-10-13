@@ -34,10 +34,12 @@ DOCUMENTS = {
     "docs/RELEASE_NOTES_3.5.0.md", "docs/CAST_BACKEND_RESEARCH.md",
     "docs/CAST_BACKEND_BENCHMARK.md",
     "docs/RELEASE_CHECKLIST.md", "docs/RELEASE_NOTES_3.5.1.md",
+    "docs/RELEASE_NOTES_3.6.0.md",
 }
 MAYA_FILES = DOCUMENTS | {
     "SECURITY.md", "plug-ins/viewmodel_weapon_toolkit.py",
     "plug-ins/cod_viewmodel_units.py", "plug-ins/cod_viewmodel_cast_backend.py",
+    "plug-ins/cod_viewmodel_exports.py",
     "plug-ins/cod_viewmodel_cast/cast.py",
     "plug-ins/cod_viewmodel_cast/castplugin.py",
 }
@@ -59,7 +61,8 @@ def fixture_sources():
     sources |= {
         "plug-ins/" + name for name in
         ("viewmodel_weapon_toolkit.py", "viewmodel_weapon_toolkit_zh_CN.py",
-         "attach_gun.py", "cod_viewmodel_units.py", "cod_viewmodel_cast_backend.py")
+         "attach_gun.py", "cod_viewmodel_units.py", "cod_viewmodel_cast_backend.py",
+         "cod_viewmodel_exports.py")
     }
     sources |= {
         "blender/cod_viewmodel_toolkit/" + name + ".py" for name in

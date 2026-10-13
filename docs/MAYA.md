@@ -28,7 +28,7 @@ baseline, hashes, and local changes.
    `plug-ins` directory into a directory on `MAYA_PLUG_IN_PATH`, such as your
    Maya user `plug-ins` directory. Copy subdirectories too. Both editions include
    `cod_viewmodel_cast_backend.py` and `cod_viewmodel_cast/{cast.py,castplugin.py}`
-   alongside `cod_viewmodel_units.py` and the toolkit entry files:
+   alongside `cod_viewmodel_units.py`, `cod_viewmodel_exports.py` and the toolkit entry files:
    - English: `viewmodel_weapon_toolkit.py`.
    - Simplified Chinese: `viewmodel_weapon_toolkit.py` plus
      `viewmodel_weapon_toolkit_zh_CN.py` (the first file is the shared core).
@@ -71,6 +71,35 @@ correctness fixes, not performance claims. See [3.5.0 notes](RELEASE_NOTES_3.5.0
 [backend design research](CAST_BACKEND_RESEARCH.md) and
 [measurement details](CAST_BACKEND_BENCHMARK.md).
 
+## Import CAST without a separate plugin
+
+Use **CoD Viewmodel Toolkit → Import CAST...**, or drop one `.cast` file into
+Maya while **Built-in CAST Drag and Drop** is enabled. Both paths use the
+bundled backend; neither requires an external `castplugin.py`. The drag/drop
+setting defaults to on and retains the existing preference key and saved choice.
+
+| Input | Behavior | Prerequisite |
+| --- | --- | --- |
+| Model-only CAST | Adds models, bones and materials in a fresh `cast_import`, `cast_import1`, etc. namespace; does not automatically attach or zero bones. | No toolkit assembly required. |
+| Animation-only CAST | Uses the existing safe single/dual animation APIs. Dual side comes from `_akimbo_l_` / `_akimbo_r_` filenames or the track signature. | A valid toolkit assembly; no guessing targets on an ordinary skeleton. |
+| Mixed model/animation or Instance container | Rejected before importing content. | Supply separate model-only and animation-only files. |
+
+Original CAST files are not modified. Model imports preserve existing scene
+nodes and materials rather than reusing their same-named counterparts. To
+assemble hands and weapons, use the single/dual builder with the original
+model paths; the general model import is not an attachment operation.
+
+With built-in drag/drop on, rejected, malformed and multi-file CAST drops do
+not fall back to another translator. Drop one file at a time or use the batch
+tools for queues. Turning the setting off explicitly restores Maya's default
+drop handling. The menu entry continues using the bundled backend.
+
+**Maya's ordinary File → Import is not redirected.** Direct use of an external
+`Cast` translator can still bind an animation to the wrong same-named `j_gun`.
+Use the toolkit gateway, **Import Animation Safely...** for single weapon,
+or explicit left/right replacement controls for dual scenes. If a dual clip's
+side cannot be inferred, use its explicit replacement control instead.
+
 ## Expected skeletons
 
 ### Single weapon
@@ -111,10 +140,17 @@ and are reused when replacing a dual animation clip.
 
 ## Output behavior
 
-The original builders keep their existing output behavior: Maya ASCII (`.ma`)
-preserves the scene and animation; CAST, SMD, and FBX are static model exports.
-The new **Single Animation Batch...** and **Dual Animation Batch...** entries
-export animation in every selected format:
+MA, CAST, FBX and SMD are **off by default** in the single/dual builders and
+quick attach. With all four off, a build assembles only the current scene: it
+creates no output directory, exported file or JSON report and starts no metric
+export worker. When saved settings from an older version are first read, the
+one-time migration resets only these four checkboxes; paths, joint mappings
+and other settings are preserved. Later explicit output selections are remembered.
+
+Selecting Maya ASCII (`.ma`) in a builder preserves the scene and animation;
+selecting CAST, SMD or FBX still exports a static model. **Single Animation
+Batch...** and **Dual Animation Batch...** export animation in every selected
+format:
 
 | Format | Batch contents |
 | --- | --- |
@@ -132,15 +168,38 @@ installed/bundled CAST plugin files are not modified by this feature.
 SMD v1 does not store frame rate, scale, or shear. Read the frame rate from
 the JSON manifest and set it in the target application. Non-unit joint scale
 or shear causes that SMD export to fail explicitly; other selected formats
-can still succeed. SMD uses centimeters and XYZ Euler rotations in radians.
+can still succeed. SMD uses centimeters by default (meters for the explicit
+metric output option) and XYZ Euler rotations in radians.
 
-All output formats are optional. Each enabled format can target a different
-folder. Existing files are not overwritten: the toolkit appends a version
-suffix such as `_v001`.
+Each enabled format can target a different folder. Existing files are not
+overwritten: the toolkit appends a version suffix such as `_v001`. After an
+all-off build, choose at least one format and its directory in the builder,
+then use **Save Current Result** to write the first outputs without rebuilding.
+The Python equivalent is `save_current_result(AttachOptions(save_scene=True))`.
 
 Attachment completion remains non-modal: successful builds do not open a
 completion dialog. Errors, partial export failures and unsaved-scene prompts
 remain visible.
+
+### Export FBX or SMD from the current scene
+
+Open **Export FBX...** or **Export SMD...** from the toolkit menu. These tools
+do not rebuild the attachment and do not depend on the builder's output
+checkboxes. Choose a filename, **Static model** or **Current animation**, and
+**Keep original** or **Meters (input: ft)**. Animation mode requires an ordered,
+non-negative integer frame range; the initial values come from the playback
+range. SMD animation starts at frame zero and contains skeleton frames only.
+
+- FBX supports an ordinary model scene as well as a toolkit assembly.
+- Static SMD requires a valid toolkit attachment and includes skinned triangles.
+- Animated SMD supports an ordinary joint skeleton and contains no mesh.
+
+An independent `mayapy` worker exports a temporary scene copy. Unit conversion
+and animated FBX's DQS setting affect only that copy; the live scene's name,
+modified state, selection, time, curves and skinning settings are preserved.
+The destination contains only the requested FBX or SMD, not MA, CAST or JSON
+sidecars. Existing files receive a version suffix. Success appears in the
+dialog status; errors remain visible. MAX export is not provided.
 
 ## Batch animation workflow
 
@@ -169,7 +228,9 @@ Python API: `batch_export_animations(hands, weapon, animation_paths, options)`
 and `batch_export_dual_animations(hands, weapon, [(left, right), ...], options)`.
 Use `AttachOptions` or `DualWieldOptions` respectively. The four existing
 output booleans and directory fields apply to both APIs. Both return the
-batch summary dictionary; they do not change the original static builder defaults.
+batch summary dictionary. Batch export requires at least one explicit output
+selection, for example `AttachOptions(save_scene=True)`; the new all-off
+builder defaults are not a valid batch export request.
 
 ## Known source-data warnings
 
@@ -182,7 +243,7 @@ the remaining animation is still imported.
 | Support level | Environment | Status |
 | --- | --- | --- |
 | Minimum expected | Maya 2022, Python 3.7.7, private patched CAST 2.01 | Python 3.7 syntax/API compatibility target; no full Maya 2022 host regression. |
-| Current verification | Maya 2027, Python 3.13.9, private patched CAST 2.01, Windows | 3.5.1 metric-export/module-path tests use this host. The 3.5.0 backend regression records remain available. See release notes for completed checks. |
+| Current verification | Maya 2027, Python 3.13.9, private patched CAST 2.01, Windows | 3.6.0 optional-output and standalone-export tests passed; English and Chinese source entries each completed eight real exports. An installed-entry animation check sampled 239 frames. Native GUI interaction was not verified this round. |
 | Historical verification | Maya 2025, Python 3.11.4, earlier bundled CAST versions, Windows | Prior releases verified single/dual workflows, localization and exports; not re-tested for 3.5.0. |
 
 Maya 2022 on Windows or Linux can also be launched in Python 2 mode; this
@@ -209,13 +270,27 @@ mayapy tests/verify_cast_v201.py
 mayapy tests/verify_private_cast_backend.py
 mayapy tests/verify_animation_read_session.py
 mayapy tests/verify_maya_drop_module_path.py
+mayapy tests/verify_cast_import_gateway.py
+mayapy tests/verify_optional_outputs.py
+python tests/verify_standalone_exports.py
+python tests/verify_standalone_export_ui.py
+mayapy tests/verify_standalone_export_host.py
 ```
 
 Batch regression tests generate synthetic CAST fixtures, check both dual
 playback modes and all four outputs, and compare FBX round-trip samples.
 Game assets are not included in the public repository.
 See [batch verification notes](BATCH_ANIMATION_VERIFICATION.md) for coverage.
-See [3.5.1 notes](RELEASE_NOTES_3.5.1.md) and the [release checklist](RELEASE_CHECKLIST.md)
+Standalone host tests use synthetic models and check static/animated exports,
+unit conversion, non-overwriting filenames and live-scene preservation. Use
+`--plugin <entry-path>` to test an installed English, Chinese or legacy entry.
+The optional-output test covers all-off single/dual/quick builds, one-time
+preference migration, first save and batch rejection with no selected format.
+The CAST gateway regression passed on Maya 2027 in the source, installed Chinese
+entry and Chinese release package. It checks isolated model namespaces/materials,
+safe single/dual routing, unsupported-input rejection, failure cleanup and absence
+of an external CAST dependency. See the release notes for the verification scope.
+See [3.6.0 notes](RELEASE_NOTES_3.6.0.md) and the [release checklist](RELEASE_CHECKLIST.md)
 for this release; prior [backend measurements](CAST_BACKEND_BENCHMARK.md) and the
 [3.2.0 verification](VERIFICATION_3.2.0.md) records historical CAST 2.00/native UI checks.
 

@@ -23,8 +23,10 @@ A local toolkit for Call of Duty first-person CAST models and skeletal animation
 | Attach a weapon to viewhands | Parent weapon `j_gun` to the hand rig's `tag_weapon` and zero the weapon's local translation without freezing joints. |
 | Assemble dual wield | Duplicate one weapon for the left/right tags; play two clips simultaneously or sequentially. |
 | Change one side's animation | Replace the left or right clip without rebuilding the assembly. |
+| Import CAST directly in Maya | Use the built-in **Import CAST...** entry for isolated models or safely routed animation, without a separate CAST plugin. |
 | Correct an offset caused by a different rest pose | Supply compatible reference viewhands to compensate relative/additive weapon-tag translation tracks. |
 | Export a set of animations | Queue single clips or explicit left/right pairs, choose formats and separate folders, and inspect per-item JSON reports. |
+| Export one current-scene file in Maya | Use the standalone FBX/SMD menu, choosing static or animated content without rebuilding the assembly. |
 | Deliver meter-scaled assets | Optionally convert output copies from assumed feet to meters; keep the source files and working assembly unchanged. |
 
 Maya includes a private, project-patched [CAST 2.01](https://github.com/dtzxporter/cast/releases/tag/v2.01) backend; Blender retains its project-patched CAST 2.00 backend and does not require Maya. Models, animations and textures are supplied by you; no game assets or host applications are bundled.
@@ -43,25 +45,25 @@ flowchart LR
 
 ## Download and install
 
-Current release: **3.5.1**. Fixes metric export from Maya-loaded entry points with missing module attributes. Release builds validate versions and localization before creating packages, preserve existing archives on failure, and have host-independent CI coverage. Blender import/export behavior is unchanged. [Release notes](docs/RELEASE_NOTES_3.5.1.md).
+Current release: **3.6.0**. All four Maya outputs default to off: build an assembly without writing files, then choose formats when needed. **Import CAST...** and built-in drag-and-drop use the private backend without a separate CAST plugin. Standalone FBX/SMD tools export a static model or current animation from an isolated scene copy. Blender behavior is unchanged. [Release notes](docs/RELEASE_NOTES_3.6.0.md).
 
 | Host | English ZIP | 简体中文 ZIP | Runtime |
 | --- | --- | --- | --- |
-| Maya | [Download](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/download/3.5.1/cod-viewmodel-toolkit-3.5.1-maya-en.zip) | [下载](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/download/3.5.1/cod-viewmodel-toolkit-3.5.1-maya-zh-CN.zip) | Maya 2027 / Windows is the current verification host; Maya 2025 was verified in prior releases; targets Maya 2022+ in Python 3 mode. |
-| Blender | [Download](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/download/3.5.1/cod-viewmodel-toolkit-3.5.1-blender-en.zip) | [下载](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/download/3.5.1/cod-viewmodel-toolkit-3.5.1-blender-zh-CN.zip) | Requires Blender 5.2+; Windows Blender 5.2.1 LTS is the package verification host. |
+| Maya | [Download](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/download/3.6.0/cod-viewmodel-toolkit-3.6.0-maya-en.zip) | [下载](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/download/3.6.0/cod-viewmodel-toolkit-3.6.0-maya-zh-CN.zip) | Maya 2027 / Windows is the current verification host; Maya 2025 was verified in prior releases; targets Maya 2022+ in Python 3 mode. |
+| Blender | [Download](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/download/3.6.0/cod-viewmodel-toolkit-3.6.0-blender-en.zip) | [下载](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/download/3.6.0/cod-viewmodel-toolkit-3.6.0-blender-zh-CN.zip) | Requires Blender 5.2+; Windows Blender 5.2.1 LTS is the package verification host. |
 
-Download a **platform/language ZIP**, not GitHub's automatically generated “Source code” archive. [SHA-256 checksums](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/download/3.5.1/SHA256SUMS.txt) are included in the release. Python runs inside the selected host; no separate Python installation is needed for normal use.
+Download a **platform/language ZIP**, not GitHub's automatically generated “Source code” archive. [SHA-256 checksums](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/download/3.6.0/SHA256SUMS.txt) are included in the release. Python runs inside the selected host; no separate Python installation is needed for normal use.
 
 ### Maya
 
 1. Save your work and close Maya before upgrading. Back up existing plugin files; keep your personal `cast.cfg` unchanged.
-2. Extract the ZIP and copy **all files and folders** from `plug-ins` into a directory on `MAYA_PLUG_IN_PATH`. Keep `cod_viewmodel_units.py`, `cod_viewmodel_cast_backend.py` and the complete `cod_viewmodel_cast` folder beside the core file. Do not overwrite an independently installed `cast.py`, `castplugin.py` or `cast.cfg`.
+2. Extract the ZIP and copy **all files and folders** from `plug-ins` into a directory on `MAYA_PLUG_IN_PATH`. Keep `cod_viewmodel_units.py`, `cod_viewmodel_exports.py`, `cod_viewmodel_cast_backend.py` and the complete `cod_viewmodel_cast` folder beside the core file. Do not overwrite an independently installed `cast.py`, `castplugin.py` or `cast.cfg`.
 3. Open Maya's Plug-in Manager. Load `viewmodel_weapon_toolkit.py` for English, or `viewmodel_weapon_toolkit_zh_CN.py` for Chinese. Enable only one language entry point.
 4. Open **CoD Viewmodel Toolkit** / **CoD 视角模型工具包** in the main menu.
 
 Upgrading from Attach Gun? The legacy `attach_gun.py` and `attachGun` command remain supported. See [installation and compatibility](docs/MAYA.md#installation) before switching entry points.
 
-The toolkit registers its own `CoDToolkitCast` translator. An existing external CAST plugin may remain installed: its version and preferences no longer select the toolkit's backend. Load only the toolkit entry point, not the nested `cod_viewmodel_cast/castplugin.py`. Source checkouts can load their entry point directly without copying files from `third_party`.
+The toolkit registers its own `CoDToolkitCast` translator. No separate CAST plugin is required for the toolkit's imports. An existing external CAST plugin may remain installed: its version and preferences no longer select the toolkit's backend. Load only the toolkit entry point, not the nested `cod_viewmodel_cast/castplugin.py`. Source checkouts can load their entry point directly without copying files from `third_party`.
 
 ### Blender
 
@@ -77,17 +79,21 @@ Prepare model-only viewhands and weapon CAST files, plus animation-only clips wh
 
 | Goal | Maya | Blender |
 | --- | --- | --- |
-| First assembly | Open the single-weapon builder, choose viewhands and weapon, check inputs, select outputs and build. | Choose **Single Weapon**, fill the model paths, run **Check Inputs**, then **Build Assembly**. |
+| First assembly | Open the single-weapon builder, choose viewhands and weapon, check inputs, optionally select outputs and build. | Choose **Single Weapon**, fill the model paths, run **Check Inputs**, then **Build Assembly**. |
+| Import a CAST model | Use **Import CAST...**, or drop one model-only CAST with **Built-in CAST Drag and Drop** enabled. This does not attach the model. | Use the toolkit builder to assemble model inputs. |
 | Animate one weapon | Use **Import Animation Safely...**, or drop a pure-animation CAST into a valid toolkit assembly. | Select the toolkit armature and apply the selected clip. |
 | Assemble dual wield | Open the dual builder; choose one weapon and left/right clips, then simultaneous or sequential playback. | Choose **Dual Wield**, supply both clips and select playback mode. |
 | Replace a dual clip | Use **Replace Left Clip... / Replace Right Clip...** in the dual window. | Select the toolkit armature and use **Replace Left / Replace Right**. |
 | Export multiple clips | Use **Single Animation Batch... / Dual Animation Batch...**. | Use **Animation Batch**, then **Start Batch Export**. |
+| Export one file | Use **Export FBX... / Export SMD...**, then choose static/current animation, frame range and units. | Choose the selected assembly's output formats and export. |
 
-Maya batch jobs start from isolated scenes; save the current scene when prompted. Blender builds a dedicated assembly collection and exports the selected assembly rather than unrelated scene objects. Blender's supported animation workflow uses the toolkit panel; Maya's safe external-drop behavior is not a shared cross-platform feature.
+Maya's **Import CAST...** adds models to a fresh namespace (`cast_import`, `cast_import1`, etc.) without zeroing bones or attaching them. Animation-only files require a valid single/dual toolkit assembly; the gateway does not guess targets on an ordinary skeleton. Mixed model/animation and instance containers are rejected: supply separate model-only inputs and animation-only clips. With **Built-in CAST Drag and Drop** enabled (default), unsupported, malformed or multi-file CAST drops are rejected without falling back to another importer. Disabling it restores Maya's default drop behavior. Maya's ordinary **File → Import** and an external `Cast` translator are not covered by this gateway. See the [CAST import guide](docs/MAYA.md#import-cast-without-a-separate-plugin).
+
+Maya batch jobs start from isolated scenes; save the current scene when prompted. Blender builds a dedicated assembly collection and exports the selected assembly rather than unrelated scene objects. Blender's supported animation workflow uses the toolkit panel; Maya's built-in external-drop behavior is not a shared cross-platform feature.
 
 ## Outputs and skinning
 
-The table describes **animated export**. Maya's original builders default to a scene plus static CAST/FBX/SMD exports; use animation batch export for animated interchange files. Blender exports animation when the selected toolkit assembly has it.
+The table describes **animated export**. Maya builders default to no disk outputs. Select formats to save an assembly, or use **Export FBX... / Export SMD...** for one static/animated file without rebuilding. Animation batch export writes every selected format. Blender exports animation when the selected toolkit assembly has it.
 
 | Format | Contents | DQS behavior |
 | --- | --- | --- |
@@ -97,7 +103,7 @@ The table describes **animated export**. Maya's original builders default to a s
 | SMD | Animated export: skeleton and animation only, no mesh | Does not encode DQS, bone scale or frame rate; configure the receiving application. |
 | JSON | Inputs, verification, output paths, warnings and batch results | Inspection report, not a scene or animation format. |
 
-Maya animation workflows explicitly set DQS; pure static Maya exports do not force that conversion. Existing files are not overwritten: Maya uses version suffixes such as `_v001`, Blender `_001`. Each enabled format can use its own folder.
+Maya animation exports explicitly set DQS; standalone exports apply it to the worker copy, preserving the live scene. Pure static Maya exports do not force that conversion. Existing files are not overwritten: Maya uses version suffixes such as `_v001`, Blender `_001`. Each enabled format can use its own folder.
 
 **Units:** default **Keep original**. **Meters (input: ft)** assumes the source distance values are feet and applies `1 ft = 0.3048 m` to output copies. This is not automatic unit detection. Maya FBX may retain centimeter storage metadata while preserving the converted physical size. See [output units](docs/OUTPUT_UNITS.md) before applying another scale conversion.
 
@@ -118,9 +124,9 @@ Detailed behavior: [Maya guide](docs/MAYA.md) · [Blender guide](docs/BLENDER.md
 
 **Maya rejects a dropped animation with `NameError: __file__`.** Update the complete plugin set to 3.4.1 or later and restart Maya. This registered-plugin path-resolution issue was fixed in 3.4.1. If another error appears, include its full Script Editor traceback in an issue.
 
-**A dual scene fails through the ordinary single-weapon import menu.** Use the dual window's left/right replacement controls. The single-weapon attachment validator is not the dual-scene entry point.
+**A dual scene fails through the ordinary single-weapon animation menu.** Use **Import CAST...**, which routes the side from the filename/track signature, or the dual window's explicit left/right replacement controls. The single-weapon attachment validator is not the dual-scene entry point.
 
-**One weapon moves but floats away from the hand.** Check whether the animation was authored against a different viewhands rest pose. A compatible reference model can compensate tag translation; blindly zeroing bones cannot replace that check.
+**One weapon moves but floats away from the hand.** First check the import entry: use **Import CAST...**, **Import Animation Safely...** or enabled built-in drops. An external `Cast` import can target the wrong same-named `j_gun`; ordinary Maya imports are not redirected. Also check whether the animation was authored against a different viewhands rest pose. A compatible reference model can compensate tag translation; blindly zeroing bones cannot replace these checks.
 
 **The FBX deforms differently after importing.** Check DQS / Preserve Volume in the receiving app, especially for Blender FBX. For frame-by-frame comparisons in Blender, use animation offset `0`; also verify units and frame rate.
 
@@ -142,12 +148,17 @@ mayapy tests/verify_private_cast_backend.py
 mayapy tests/verify_cast_v201.py
 mayapy tests/verify_animation_read_session.py
 mayapy tests/verify_maya_drop_module_path.py
+mayapy tests/verify_cast_import_gateway.py
+mayapy tests/verify_optional_outputs.py
+python tests/verify_standalone_exports.py
+python tests/verify_standalone_export_ui.py
+mayapy tests/verify_standalone_export_host.py
 python scripts/build_release.py ../release-output
 ```
 
 `mayapy` is Maya's Python executable; use its full path if it is not on `PATH`. The build command produces **four** platform/language ZIPs and refuses to overwrite existing archives. Source installation details are in the [Maya](docs/MAYA.md#installation) and [Blender](docs/BLENDER.md#install) guides.
 
-GitHub Actions checks source syntax, every Maya runtime file's Python 3.7 syntax, backend integrity, release-build failures, localization, package layouts and reproducible archives. It does **not** run Maya or Blender. Host verification is recorded in the [current release notes](docs/RELEASE_NOTES_3.5.1.md) and [release checklist](docs/RELEASE_CHECKLIST.md); prior [backend measurements](docs/CAST_BACKEND_BENCHMARK.md) and [metric output records](docs/VERIFICATION_3.4.0.md) remain available. Maya 2022 compatibility is a syntax/API target, not a full host regression run.
+GitHub Actions checks source syntax, every Maya runtime file's Python 3.7 syntax, backend integrity, standalone export/UI contracts, release-build failures, localization, package layouts and reproducible archives. It does **not** run Maya or Blender. Host verification is recorded in the [current release notes](docs/RELEASE_NOTES_3.6.0.md) and [release checklist](docs/RELEASE_CHECKLIST.md); prior [backend measurements](docs/CAST_BACKEND_BENCHMARK.md) and [metric output records](docs/VERIFICATION_3.4.0.md) remain available. Maya 2022 compatibility is a syntax/API target, not a full host regression run.
 
 ## Project layout
 

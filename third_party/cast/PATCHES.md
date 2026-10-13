@@ -20,7 +20,7 @@ while retaining this license and patch record under `third_party/cast`.
 The bundled `cast.py` is byte-for-byte identical to the upstream v2.00/v2.01
 releases (the serializer did not change). The bundled `castplugin.py` is a project-maintained patch with
 SHA-256
-`ec6a625e0dab48af5b244a010a78962932cc6a32a5ee5d00ef5a2b4c98f90513`.
+`4d1774f51343078d6e36efb2eeea55b800f368b3a3b2576b614635003945a65d`.
 
 The v2.01 Maya change was selectively merged on top of the ten existing local
 patches: [fix skeleton export parent indices](https://github.com/dtzxporter/cast/commit/02a759082b22e278ba8cc2aff4df9169bdfb2195).
@@ -75,6 +75,23 @@ performance claim. Latest-release status was checked on 2026-09-24.
     considered, rather than only the last override in the list. Translation,
     rotation and scale flags remain independent. This is a separately tested
     correctness fix, not a performance optimization.
+16. Use absolute active-namespace material names for lookup, creation and slot
+    assignment. In Maya relative-name mode, `shadingNode` can return an
+    unqualified leaf that subsequently resolves to an existing root material.
+    Preserve Maya's unique leaf suffix while qualifying shaders, shading groups
+    and their texture/utility nodes against the requested namespace. Build utility
+    leaf names from the shader leaf rather than inserting namespace separators
+    inside a leaf. The toolkit model gateway isolates names and does not merge an
+    existing skeleton; this patch prevents reusing or changing its materials too.
+17. Do not require the ShaderFX command for ordinary Standard Surface/Lambert
+    materials. Only actual ShaderFX node types request a quoted shader update.
+    This avoids aborting texture imports in hosts without ShaderFX loaded.
+    Constant-color slots load Maya's bundled `lookdevKit` when `colorConstant`
+    is not registered, rather than creating an unknown node in a clean profile.
+
+`tests/verify_cast_import_gateway.py` covers isolated model nodes and material
+connections, existing scene preservation, safe single/dual animation, explicit
+rejection without external fallback, and operation namespace/option restoration.
 
 `tests/verify_cast_v201.py` covers grouped-joint export parent indices, absolute /
 relative / additive mapped animation (translation and quaternion), existing

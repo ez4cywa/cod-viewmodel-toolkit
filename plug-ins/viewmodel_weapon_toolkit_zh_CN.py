@@ -1,4 +1,4 @@
-"""Simplified Chinese entry point for CoD Viewmodel Toolkit 3.5.1.
+"""Simplified Chinese entry point for CoD Viewmodel Toolkit 3.6.0.
 
 This file reuses the English implementation beside it and localizes Maya UI
 text at the command boundary. Technical identifiers, joint names, file
@@ -17,7 +17,7 @@ import sys
 import maya.cmds as _maya_cmds
 
 
-VERSION = "3.5.1"
+VERSION = "3.6.0"
 _LOADER_FILE = globals().get("__file__") or sys._getframe().f_code.co_filename
 _CORE_PATH = os.path.join(
     os.path.dirname(os.path.abspath(_LOADER_FILE)),
@@ -40,7 +40,32 @@ _EXACT_TRANSLATIONS = {
     "Operation status": "操作状态",
     "Duplicates one weapon onto the left and right hand tags.": "将同一武器复制到左右手挂点。",
     "Select at least one format. Blank folders use the default folder.": "至少勾选一种格式。目录留空时使用默认目录。",
+    "Optional: leave all formats off to keep only the scene. Blank folders use the default folder.":
+        "可选：全部关闭时只保留当前场景，不生成文件。目录留空时使用默认目录。",
+    "Attachment complete. Scene only (no files).": "挂载完成。仅保留当前场景，未生成文件。",
+    "Scene only (no files)": "仅保留场景（不生成文件）",
+    "Export FBX...": "单独导出 FBX…",
+    "Export SMD...": "单独导出 SMD…",
+    "Import CAST...": "导入 CAST…",
+    "Built-in CAST Drag and Drop": "内置 CAST 拖入处理",
+    "Import isolated models or safely animate a toolkit assembly using the built-in backend.":
+        "使用内置后端隔离导入模型，或为工具包组装安全导入动画。",
+    "Import supported CAST drops with the built-in backend; never fall back after a rejected import.":
+        "拖入受支持的 CAST 时使用内置后端；导入被拒绝后不回退至其他转换器。",
+    "Export": "导出",
+    "Export file:": "导出文件：",
+    "Export mode:": "导出模式：",
+    "Static model": "静态模型",
+    "Current animation": "当前动画",
+    "Frames:": "帧范围：",
+    "Export current scene without rebuilding the attachment.":
+        "直接导出当前场景，无需重新挂载。",
+    "Static SMD requires a toolkit attachment. Animated SMD contains skeletal frames only.":
+        "静态 SMD 需要本工具包的挂载结果。动画 SMD 仅包含骨骼帧。",
+    "Choose an export file path first": "请先选择导出文件路径",
     "CAST, SMD and FBX here export static models. Use Animation Batch for animated exports.": "此处 CAST、SMD 和 FBX 导出静态模型。导出动画请使用动画批量导出。",
+    "CAST, SMD and FBX here export static models. Use standalone FBX/SMD or Animation Batch for animated exports.":
+        "此处 CAST、SMD 和 FBX 导出静态模型。导出动画可用单独导出 FBX/SMD 或动画批量导出。",
     "No animations queued. Add files to begin.": "队列为空，请先添加动画文件。",
     "Single Animation Batch...": "单武器动画批量导出…",
     "Dual Animation Batch...": "双持动画批量导出…",
@@ -143,11 +168,17 @@ _PHRASE_TRANSLATIONS = (
      "  conflicts.",
      "- 导入或拖放纯动画 CAST 时，会安全绕过重名关节冲突。"),
     ("ANIMATION & EXPORT", "动画与导出"),
+    ("- Import CAST: isolated models and safe animation, without an external plugin.",
+     "- 导入 CAST：隔离导入模型、安全导入动画，无需外部插件。"),
     ("- Queue multiple single clips or explicit left/right dual pairs.",
      "- 可排队多个单武器动画，或明确的左右双持动画配对。"),
     ("- Builders: animated MA scenes plus optional static CAST/SMD/FBX\n"
      "  model outputs.",
      "- 构建器：输出含动画的 MA 场景，以及可选的静态 CAST/SMD/FBX 模型。"),
+    ("- Builders: scene-only by default; optional MA/CAST/SMD/FBX outputs.",
+     "- 构建器：默认仅保留场景，可选输出 MA/CAST/SMD/FBX。"),
+    ("- Standalone FBX/SMD: choose a static model or the current animation.",
+     "- 单独导出 FBX/SMD：选择静态模型或当前动画。"),
     ("- Animation batches: animated MA/CAST/FBX and skeletal-animation SMD;\n"
      "  all use DQS skinning.",
      "- 动画批量导出：输出含动画的 MA/CAST/FBX 和仅骨骼动画的 SMD；\n"
@@ -196,6 +227,10 @@ _PHRASE_TRANSLATIONS = (
     (" - Select Attachment", " - 选择挂接对象"),
     (" - Saved", " - 已保存"),
     (" - Save Result", " - 保存结果"),
+    (" - Export FBX", " - 单独导出 FBX"),
+    (" - Export SMD", " - 单独导出 SMD"),
+    ("Outputs:", "输出："),
+    (" + JSON manifest", " + JSON 清单"),
     (" - Open Output Folders", " - 打开输出目录"),
     (" - Dual Preflight Passed", " - 双持预检通过"),
     (" - Dual Preflight", " - 双持预检"),
@@ -319,6 +354,8 @@ def translate_ui_text(value):
         return "挂载完成。清单：" + value[len("Attachment complete. Manifest: "):]
     if value.startswith("Some animation outputs failed: "):
         return "部分动画输出失败：" + value[len("Some animation outputs failed: "):]
+    if value.startswith("Export complete: "):
+        return "导出完成：" + value[len("Export complete: "):]
     translated = _EXACT_TRANSLATIONS.get(value)
     if translated is not None:
         return translated
@@ -345,7 +382,7 @@ class _LocalizedCmdsProxy:
     _UI_COMMANDS = {
         "button", "checkBox", "confirmDialog", "fileDialog2", "menu",
         "menuItem", "progressWindow", "text", "window", "frameLayout",
-        "textField", "textScrollList", "optionMenu",
+        "textField", "textScrollList", "optionMenu", "intFieldGrp",
     }
     _UI_KEYWORDS = {
         "annotation", "button", "cancelButton", "caption", "defaultButton",

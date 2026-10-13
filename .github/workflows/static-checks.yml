@@ -28,6 +28,10 @@ jobs:
         run: python tests/verify_vendored_blender_cast.py
       - name: Verify release building and localization
         run: python tests/verify_build_release.py
+      - name: Verify standalone export and UI contracts
+        run: |
+          python tests/verify_standalone_exports.py
+          python tests/verify_standalone_export_ui.py
       - name: Reject generated assets
         shell: bash
         run: |
