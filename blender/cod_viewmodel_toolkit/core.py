@@ -16,7 +16,7 @@ from mathutils import Matrix, Vector
 
 from .backend import backend, options as cast_options, select
 
-VERSION = "3.5.0"
+VERSION = "3.5.1"
 STATE_KEY = "vwt_assembly"
 
 

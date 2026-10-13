@@ -10,14 +10,24 @@ permissions:
 jobs:
   source:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.14"]
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
     steps:
       - uses: actions/checkout@v4
-      - name: Compile Python sources
-        run: python -m py_compile plug-ins/*.py tests/*.py scripts/*.py third_party/cast/*.py third_party/cast_blender/*.py blender/cod_viewmodel_toolkit/*.py
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Verify source and Maya Python 3.7 syntax
+        run: python tests/verify_source_contracts.py
       - name: Verify bundled CAST translator
         run: python tests/verify_vendored_cast.py
       - name: Verify bundled Blender CAST backend
         run: python tests/verify_vendored_blender_cast.py
+      - name: Verify release building and localization
+        run: python tests/verify_build_release.py
       - name: Reject generated assets
         shell: bash
         run: |

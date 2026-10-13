@@ -5,7 +5,7 @@ import tokenize
 
 TEXT = {
     "CoD Viewmodel Toolkit": "CoD 视角模型工具包（简体中文）",
-    "CoD Viewmodel Toolkit 3.5.0": "CoD 视角模型工具包 3.5.0",
+    "CoD Viewmodel Toolkit 3.5.1": "CoD 视角模型工具包 3.5.1",
     "CAST single/dual weapon assembly and animation batch exports": "CAST 单武器／双持组装与动画批量导出",
     "Animation / Left": "动画／左侧动画",
     "Right Animation": "右侧动画",
@@ -122,9 +122,16 @@ def localize(source, filename):
     source = tokenize.untokenize(result)
     if filename == "ui.py":
         # CJK glyphs occupy about twice the width of the Latin UI font.
-        source = source.replace("width = max(22,", "width = max(11,").replace(
-            "(7 * context.preferences.system.ui_scale)", "(14 * context.preferences.system.ui_scale)")
-        source = source.replace("self.side.title() +", "('左' if self.side == 'left' else '右') +")
-        source = source.replace('result["status"])', '{"ok": "成功", "failed": "失败"}.get(result["status"], result["status"]))')
+        rewrites = (
+            ("width = max(22,", "width = max(11,"),
+            ("(7 * context.preferences.system.ui_scale)", "(14 * context.preferences.system.ui_scale)"),
+            ("self.side.title() +", "('左' if self.side == 'left' else '右') +"),
+            ('result["status"])', '{"ok": "成功", "failed": "失败"}.get(result["status"], result["status"]))'),
+        )
+        for old, new in rewrites:
+            count = source.count(old)
+            if count != 1:
+                raise ValueError("%s: expected one localization rewrite %r, found %d" % (filename, old, count))
+            source = source.replace(old, new, 1)
     compile(source, filename, "exec")
     return source.encode("utf-8")

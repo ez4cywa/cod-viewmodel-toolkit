@@ -47,6 +47,7 @@ import traceback
 from urllib.parse import unquote, urlparse
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass, field, replace
+from types import SimpleNamespace
 
 import maya.mel as mel
 import maya.cmds as cmds
@@ -86,7 +87,7 @@ COMMAND_NAME = "viewmodelWeaponToolkit"
 LEGACY_COMMAND_NAME = "attachGun"
 WINDOW_NAME = "ViewmodelWeaponToolkitWindow"
 DUAL_WINDOW_NAME = "ViewmodelWeaponToolkitDualWindow"
-VERSION = "3.5.0"
+VERSION = "3.5.1"
 
 VIEWHANDS_OPTVAR = "attachGun_viewhandsPath"
 OUTPUT_DIR_OPTVAR = "attachGun_outputDir"
@@ -436,6 +437,42 @@ def _toolkit_module_dir():
     if path:
         return os.path.dirname(os.path.abspath(path))
     return ""
+
+
+def _core_module_path():
+    """Return the implementation file, not its Chinese/legacy registration entry."""
+    path = globals().get("__file__", "")
+    if not path:
+        directory = _toolkit_module_dir()
+        if not directory:
+            raise RuntimeError("Toolkit core path is unavailable; load the toolkit in Plug-in Manager")
+        path = os.path.join(directory, PLUGIN_BASENAME + ".py")
+    path = os.path.normpath(os.path.abspath(path))
+    if not os.path.isfile(path):
+        raise RuntimeError("Toolkit core implementation is missing: %s" % path)
+    return path
+
+
+def _core_runtime():
+    """Expose this registered implementation when Maya provides no Python module.
+
+    Maya can execute plugin functions without __name__ or __file__. Looking up
+    sys.modules then selects builtins, not these globals. The worker adapter
+    needs our actual functions and result classes, independent of loader mode.
+    """
+    return SimpleNamespace(**globals())
+
+
+@contextmanager
+def _metric_output():
+    """Scope metre-valued writers to the isolated metric worker's exports."""
+    global _OUTPUT_IN_METERS
+    previous = _OUTPUT_IN_METERS
+    _OUTPUT_IN_METERS = True
+    try:
+        yield
+    finally:
+        _OUTPUT_IN_METERS = previous
 
 
 def _cast_backend():
@@ -2396,7 +2433,7 @@ def _export_result_smd(result):
 def _write_result_outputs(result, options, allocate=True):
     """Write every selected output using one shared versioned basename."""
     if options.output_unit == "m":
-        return _units_module().export_copy(sys.modules[__name__], result, options, allocate)
+        return _units_module().export_copy(_core_runtime(), result, options, allocate)
     if result.animated_outputs:
         return _write_animation_outputs(result, options, allocate=allocate)
     validate_output_options(options)
@@ -3575,7 +3612,7 @@ def export_smd_animation(path, frame_range):
 def _write_animation_outputs(result, options, allocate=True):
     """Write selected animated formats and record independent format failures."""
     if options.output_unit == "m":
-        return _units_module().export_copy(sys.modules[__name__], result, options, allocate)
+        return _units_module().export_copy(_core_runtime(), result, options, allocate)
     validate_output_options(options)
     result.frame_range = _animation_export_range(result.frame_range)
     result.framerate = float(_castplugin_module().utilityUnitToFramerate(

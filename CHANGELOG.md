@@ -2,6 +2,23 @@
 
 All notable changes to this project are documented here.
 
+## [3.5.1] - 2026-10-13
+
+- Resolve the metric export worker's actual core implementation independently
+  of Maya's registered language entry and missing module attributes.
+- Validate worker dependencies before allocating output files or saving a
+  temporary scene; preserve the live scene and existing unit conversion.
+- Preflight all release inputs, versions and localization before building
+  archives. Clean up this build's outputs on failure without overwriting
+  existing packages; retain CLI, archive layout and reproducible timestamps.
+- Consolidate common documentation lists and check release versions with
+  explicit errors that remain active under Python optimization.
+- Detect missing or ambiguous Chinese UI transformations instead of silently
+  producing incomplete localized packages.
+- Add host-independent build regressions and all Maya runtime Python 3.7
+  syntax checks to CI; update the release checklist and contributor guide.
+- Maya and Blender CAST backends and import algorithms are unchanged.
+
 ## [3.5.0] - 2026-09-24
 
 - Integrate a private Maya CAST 2.01 backend and `CoDToolkitCast` translator,

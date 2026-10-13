@@ -149,7 +149,7 @@ Python 接口：`batch_export_animations(hands, weapon, animation_paths, options
 | 支持级别 | 环境 | 状态 |
 | --- | --- | --- |
 | 预期最低版本 | Maya 2022、Python 3.7.7、私有补丁版 CAST 2.01 | Python 3.7 语法与 API 兼容性目标；未在 Maya 2022 执行完整宿主回归。 |
-| 当前验证版本 | Maya 2027、Python 3.13.9、私有补丁版 CAST 2.01、Windows | 3.5.0 后端身份、父索引、目标路由和操作生命周期回归在此环境运行；已完成项目见更新说明。 |
+| 当前验证版本 | Maya 2027、Python 3.13.9、私有补丁版 CAST 2.01、Windows | 3.5.1 米制导出与模块路径回归在此环境运行；3.5.0 后端验证记录保留。实际完成项目见更新说明。 |
 | 历史验证版本 | Maya 2025、Python 3.11.4、此前内置 CAST 版本、Windows | 旧版验证过单武器、双持、中文界面和导出；3.5.0 未在此版本重新测试。 |
 
 Windows 或 Linux 版 Maya 2022 也可以用 Python 2 模式启动；本工具包必须在
@@ -178,8 +178,8 @@ mayapy tests/verify_maya_drop_module_path.py
 批量回归会自动生成合成 CAST 样本，检查双持两种播放模式、四种输出及 FBX
 重新导入后的逐帧结果。公开仓库不包含游戏资产。
 具体覆盖范围见[批量导出验证记录](BATCH_ANIMATION_VERIFICATION.md)。
-本版检查见 [3.5.0 更新说明](RELEASE_NOTES_3.5.0.md)和
-[后端测量记录](CAST_BACKEND_BENCHMARK.md)；CAST 2.00 与原生界面历史检查见
+本版检查见 [3.5.1 更新说明](RELEASE_NOTES_3.5.1.md)和[发布清单](RELEASE_CHECKLIST.md)；
+此前的[后端测量记录](CAST_BACKEND_BENCHMARK.md)保留。CAST 2.00 与原生界面历史检查见
 [3.2.0 验证记录](VERIFICATION_3.2.0.md)。
 
 使用 `python scripts/build_release.py <output-dir>` 构建四个平台／语言安装包。

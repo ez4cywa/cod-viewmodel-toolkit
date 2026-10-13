@@ -16,12 +16,17 @@ compatibility target and can be release-tested in Autodesk Maya 2027. Maya
    lifecycle in `cod_viewmodel_cast_backend.py`, and documented upstream
    translator patches in `third_party/cast/castplugin.py`.
 4. Keep `attach_gun.py` as a compatibility loader only.
-5. Check all Python files against Python 3.7 syntax and run
-   `python tests/verify_vendored_cast.py` followed by
+5. Run `python tests/verify_source_contracts.py`, both vendored-backend
+   checks and `python tests/verify_build_release.py`. The source check applies
+   Python 3.7 syntax to Maya runtime files and the current interpreter's
+   syntax to development tools and Blender sources. Then run
    `mayapy tests/verify_plugin_identity.py` before opening a pull request.
    Backend changes also need `verify_private_cast_backend.py`,
    `verify_cast_v201.py` and `verify_animation_read_session.py` under `mayapy`,
    plus the relevant single/dual, drop and export regression paths.
+   Metric changes need `verify_metric_module_path.py` against the actual
+   registered English/Chinese/legacy core and `verify_maya_units.py`; a second
+   ordinary Python import does not reproduce Maya's missing module attributes.
 
 Keep `third_party/cast/cast.py` identical to the shared upstream v2.00/v2.01
 serializer; v2.01 did not change it. Any change to
@@ -37,8 +42,16 @@ parsed documents and animation targets; never retain scene/API objects across
 clips. Keep Maya API work on the main thread.
 
 Blender retains its patched CAST v2.00 backend under `third_party/cast_blender`.
-The 3.5.0 Blender package version is synchronized; its import/export algorithms
+The Blender package version is synchronized; its import/export algorithms
 have not been upgraded to CAST 2.01.
+
+Keep release file selection, version checks and archive bookkeeping in
+`scripts/build_release.py`. It reads and localizes all inputs before creating
+packages, then publishes only a complete successful build. Existing ZIPs must
+not be overwritten, and failure cleanup must affect only files this build owns.
+The build test runs without Maya/Blender and checks these observable outcomes,
+package layouts, localization and deterministic bytes. See the
+[release checklist](docs/RELEASE_CHECKLIST.md) for host and publication checks.
 
 For performance changes, compare an immutable baseline with the candidate and
 check output equivalence. Distinguish parse-count reductions from measured

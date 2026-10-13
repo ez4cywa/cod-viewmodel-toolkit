@@ -43,14 +43,14 @@ flowchart LR
 
 ## Download and install
 
-Current release: **3.5.0**. Maya now consistently uses its private CAST 2.01 backend, reuses animation parsing within an operation and routes animation through explicit DAG targets without temporary joint renaming. Includes the upstream skeleton-parent fix and a project curve-mode override fix. Blender behavior is unchanged. [Release notes](docs/RELEASE_NOTES_3.5.0.md).
+Current release: **3.5.1**. Fixes metric export from Maya-loaded entry points with missing module attributes. Release builds validate versions and localization before creating packages, preserve existing archives on failure, and have host-independent CI coverage. Blender import/export behavior is unchanged. [Release notes](docs/RELEASE_NOTES_3.5.1.md).
 
 | Host | English ZIP | 简体中文 ZIP | Runtime |
 | --- | --- | --- | --- |
-| Maya | [Download](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/download/3.5.0/cod-viewmodel-toolkit-3.5.0-maya-en.zip) | [下载](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/download/3.5.0/cod-viewmodel-toolkit-3.5.0-maya-zh-CN.zip) | Maya 2027 / Windows is the current verification host; Maya 2025 was verified in prior releases; targets Maya 2022+ in Python 3 mode. |
-| Blender | [Download](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/download/3.5.0/cod-viewmodel-toolkit-3.5.0-blender-en.zip) | [下载](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/download/3.5.0/cod-viewmodel-toolkit-3.5.0-blender-zh-CN.zip) | Requires Blender 5.2+; Blender 5.2.1 LTS / Windows verified in prior releases. |
+| Maya | [Download](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/download/3.5.1/cod-viewmodel-toolkit-3.5.1-maya-en.zip) | [下载](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/download/3.5.1/cod-viewmodel-toolkit-3.5.1-maya-zh-CN.zip) | Maya 2027 / Windows is the current verification host; Maya 2025 was verified in prior releases; targets Maya 2022+ in Python 3 mode. |
+| Blender | [Download](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/download/3.5.1/cod-viewmodel-toolkit-3.5.1-blender-en.zip) | [下载](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/download/3.5.1/cod-viewmodel-toolkit-3.5.1-blender-zh-CN.zip) | Requires Blender 5.2+; Windows Blender 5.2.1 LTS is the package verification host. |
 
-Download a **platform/language ZIP**, not GitHub's automatically generated “Source code” archive. [SHA-256 checksums](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/download/3.5.0/SHA256SUMS.txt) are included in the release. Python runs inside the selected host; no separate Python installation is needed for normal use.
+Download a **platform/language ZIP**, not GitHub's automatically generated “Source code” archive. [SHA-256 checksums](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/download/3.5.1/SHA256SUMS.txt) are included in the release. Python runs inside the selected host; no separate Python installation is needed for normal use.
 
 ### Maya
 
@@ -147,7 +147,7 @@ python scripts/build_release.py ../release-output
 
 `mayapy` is Maya's Python executable; use its full path if it is not on `PATH`. The build command produces **four** platform/language ZIPs and refuses to overwrite existing archives. Source installation details are in the [Maya](docs/MAYA.md#installation) and [Blender](docs/BLENDER.md#install) guides.
 
-GitHub Actions runs syntax, bundled-backend integrity and generated-asset checks. It does **not** run Maya or Blender. Host-dependent verification is documented separately: [3.5.0 backend measurements](docs/CAST_BACKEND_BENCHMARK.md), [3.4.1 import fix](docs/VERIFICATION_3.4.1.md), [metric outputs](docs/VERIFICATION_3.4.0.md), [Maya/Blender](docs/VERIFICATION_3.3.0.md), [animation batches](docs/BATCH_ANIMATION_VERIFICATION.md). Maya 2022 compatibility is based on Python 3.7 syntax/API assessment, not a full host regression run.
+GitHub Actions checks source syntax, every Maya runtime file's Python 3.7 syntax, backend integrity, release-build failures, localization, package layouts and reproducible archives. It does **not** run Maya or Blender. Host verification is recorded in the [current release notes](docs/RELEASE_NOTES_3.5.1.md) and [release checklist](docs/RELEASE_CHECKLIST.md); prior [backend measurements](docs/CAST_BACKEND_BENCHMARK.md) and [metric output records](docs/VERIFICATION_3.4.0.md) remain available. Maya 2022 compatibility is a syntax/API target, not a full host regression run.
 
 ## Project layout
 

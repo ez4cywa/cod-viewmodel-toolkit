@@ -5,13 +5,14 @@ animation writer uses current working units. Keep those boundaries explicit.
 """
 
 from dataclasses import asdict
-import importlib.util
+import gc
 import json
 import os
 from pathlib import Path
 import subprocess
 import sys
 import tempfile
+import types
 
 FEET_TO_METERS = 0.3048
 FEET_TO_CENTIMETERS = 30.48
@@ -155,11 +156,12 @@ def convert_scene_copy():
 def export_copy(core, result, options, allocate=True):
     import maya.cmds as cmds
     core.validate_output_options(options)
-    if allocate:
-        core._allocate_result_output_paths(result, options.output_dir, options)
+    core_path = core._core_module_path()
     executable = Path(sys.executable).with_name("mayapy.exe" if os.name == "nt" else "mayapy")
     if not executable.is_file():
         raise RuntimeError("Metric scene export requires Maya's mayapy executable: " + str(executable))
+    if allocate:
+        core._allocate_result_output_paths(result, options.output_dir, options)
     original_selection = cmds.ls(selection=True, long=True) or []
     modified = cmds.file(query=True, modified=True)
     with tempfile.TemporaryDirectory(prefix="cod_metric_export_") as directory:
@@ -174,7 +176,7 @@ def export_copy(core, result, options, allocate=True):
         if getattr(result, "_cast_bind_model", None) is not None:
             bind_path = str(folder / "bind.cast")
             result._cast_bind_model.save(bind_path)
-        request = {"core": os.path.abspath(core.__file__), "scene": str(scene_path),
+        request = {"core": core_path, "scene": str(scene_path),
                    "result": asdict(result), "dual": isinstance(result, core.DualWieldResult),
                    "options": asdict(options), "bind": bind_path,
                    "bind_error": getattr(result, "_cast_bind_error", ""),
@@ -202,6 +204,21 @@ def export_copy(core, result, options, allocate=True):
         result.frame_range = tuple(response["frame_range"])
 
 
+def _registered_core(path):
+    """Find the loaded Maya implementation, including nameless plugin globals."""
+    expected = os.path.normcase(os.path.abspath(path))
+    found = {}
+    for obj in gc.get_objects():
+        if type(obj) is types.FunctionType and obj.__name__ == "_core_runtime":
+            namespace = obj.__globals__
+            registered = namespace.get("_TOOLKIT_PLUGIN_PATH", "")
+            if registered and os.path.normcase(os.path.abspath(registered)) == expected:
+                found[id(namespace)] = obj
+    if len(found) != 1:
+        raise RuntimeError("Expected one registered toolkit core for metric export: %s" % path)
+    return next(iter(found.values()))()
+
+
 def run_request(path):
     import maya.standalone
     maya.standalone.initialize(name="python")
@@ -209,14 +226,7 @@ def run_request(path):
     try:
         request = json.loads(Path(path).read_text(encoding="utf-8"))
         cmds.loadPlugin(request["core"], quiet=True)
-        core = next((module for module in tuple(sys.modules.values())
-                    if getattr(module, "__file__", "") and os.path.normcase(os.path.abspath(module.__file__))
-                    == os.path.normcase(request["core"])), None)
-        if core is None:
-            spec = importlib.util.spec_from_file_location("cod_metric_core", request["core"])
-            core = importlib.util.module_from_spec(spec)
-            sys.modules[spec.name] = core
-            spec.loader.exec_module(core)
+        core = _registered_core(request["core"])
         cmds.file(request["scene"], open=True, force=True, prompt=False, executeScriptNodes=False)
         cmds.upAxis(axis=request["up_axis"], rotateView=False)
         cmds.playbackOptions(**request["playback"])
@@ -228,7 +238,6 @@ def run_request(path):
         options.output_unit = "original"
         conversion = convert_scene_copy()
         result.unit_conversion = conversion
-        core._OUTPUT_IN_METERS = True
         if options.export_fbx:
             core._ensure_fbx_exporter()
             core.mel.eval('FBXExportUpAxis ' + request["up_axis"])
@@ -240,7 +249,8 @@ def run_request(path):
                 model_factor=request["bind_factor"])
         if request["bind_error"]:
             result._cast_bind_error = request["bind_error"]
-        core._write_result_outputs(result, options, allocate=False)
+        with core._metric_output():
+            core._write_result_outputs(result, options, allocate=False)
         Path(request["response"]).write_text(json.dumps(asdict(result), ensure_ascii=False), encoding="utf-8")
     finally:
         maya.standalone.uninitialize()

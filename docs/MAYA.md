@@ -182,7 +182,7 @@ the remaining animation is still imported.
 | Support level | Environment | Status |
 | --- | --- | --- |
 | Minimum expected | Maya 2022, Python 3.7.7, private patched CAST 2.01 | Python 3.7 syntax/API compatibility target; no full Maya 2022 host regression. |
-| Current verification | Maya 2027, Python 3.13.9, private patched CAST 2.01, Windows | 3.5.0 backend identity, parent indices, target routing and operation-lifetime regressions run in this host. See release notes for the completed checks. |
+| Current verification | Maya 2027, Python 3.13.9, private patched CAST 2.01, Windows | 3.5.1 metric-export/module-path tests use this host. The 3.5.0 backend regression records remain available. See release notes for completed checks. |
 | Historical verification | Maya 2025, Python 3.11.4, earlier bundled CAST versions, Windows | Prior releases verified single/dual workflows, localization and exports; not re-tested for 3.5.0. |
 
 Maya 2022 on Windows or Linux can also be launched in Python 2 mode; this
@@ -215,8 +215,8 @@ Batch regression tests generate synthetic CAST fixtures, check both dual
 playback modes and all four outputs, and compare FBX round-trip samples.
 Game assets are not included in the public repository.
 See [batch verification notes](BATCH_ANIMATION_VERIFICATION.md) for coverage.
-See [3.5.0 notes](RELEASE_NOTES_3.5.0.md) and
-[backend measurements](CAST_BACKEND_BENCHMARK.md) for this release; the
+See [3.5.1 notes](RELEASE_NOTES_3.5.1.md) and the [release checklist](RELEASE_CHECKLIST.md)
+for this release; prior [backend measurements](CAST_BACKEND_BENCHMARK.md) and the
 [3.2.0 verification](VERIFICATION_3.2.0.md) records historical CAST 2.00/native UI checks.
 
 Build all four platform/language archives with `python scripts/build_release.py <output-dir>`.

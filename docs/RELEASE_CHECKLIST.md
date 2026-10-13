@@ -1,42 +1,71 @@
 # Release checklist
 
-## Source
+Use the Maya core `VERSION` as the release version. The build command validates
+the other entry points and Blender titles against it; do not copy a version
+number from an older verification record.
 
-- [ ] `VERSION` is exactly `3.2.0` for this release.
-- [ ] The primary and legacy loaders both pass the identity test.
-- [ ] The Simplified Chinese loader passes identity and localization tests.
-- [ ] All distributed Python files parse as Python 3.7 syntax for the Maya
-      2022 minimum compatibility target.
-- [ ] Single-weapon and both dual-animation modes pass in Maya 2025.
-- [ ] Single and dual batch queues pass all four animated formats, format
-      selection, failure continuation, cancellation, and FBX round-trip checks.
-- [ ] Reference-pose compensation passes in both English and Simplified
-      Chinese editions and survives save/reopen validation.
-- [ ] The bundled patched CAST 2.00 translator is used for integration tests.
-- [ ] `tests/verify_vendored_cast.py` confirms the bundled CAST v2.00 source,
-      local patch markers, hashes, and Python 3.7 syntax.
-- [ ] User-facing names consistently say Maya Viewmodel Weapon Toolkit.
+## Source checks
 
-## Repository hygiene
+Run from the repository root with ordinary Python (no host installation needed):
 
-- [ ] No game assets, exports, verification scenes, archives, or backups.
-- [ ] No personal absolute paths, credentials, tokens, or Maya preferences.
-- [ ] License and third-party notices are present.
-- [ ] The upstream CAST license and patch provenance are included, while
-      `cast.cfg` and obsolete `castpluginoptions.mel` remain excluded.
-- [ ] English and Chinese installation instructions match current behavior.
-- [ ] English and Chinese entry points are documented as mutually exclusive.
-- [ ] Compatibility wording distinguishes the Maya 2022/Python 3 expected
-      minimum from the Maya 2025/Windows verified release environment.
+```text
+python tests/verify_source_contracts.py
+python tests/verify_vendored_cast.py
+python tests/verify_vendored_blender_cast.py
+python tests/verify_build_release.py
+```
 
-## GitHub
+- [ ] All source checks pass, including Maya runtime Python 3.7 syntax.
+- [ ] Build failure tests preserve existing packages and leave no newly
+      published ZIPs; optimized Python still rejects mismatched versions.
+- [ ] English/Chinese versions, UI titles and transformations match.
+- [ ] Release notes, changelog and bilingual download links use the new tag.
+- [ ] No game assets, scene exports, preferences, credentials or personal
+      paths are added to the repository.
+- [ ] Third-party licenses, pinned source hashes and patch records are current.
+      Maya uses private CAST 2.01; Blender retains patched CAST 2.00.
 
-- [ ] Create the repository as `maya-viewmodel-weapon-toolkit`.
-- [ ] Set a concise description and add `maya`, `maya-plugin`, `cast`,
-      `animation`, and `game-development` topics.
-- [ ] Push the reviewed local `main` branch.
-- [ ] Create a `3.2.0` release and attach separate English and Simplified Chinese
-      zip archives containing the toolkit and patched CAST runtime files.
-- [ ] Test both attached archives in a clean Maya 2025 user profile without a
-      separately installed CAST translator.
-      Use `mayapy tests/verify_release_package.py <expanded-dir> en|zh-CN`.
+## Host verification
+
+Use isolated profiles and synthetic fixtures. Record the exact host version,
+test outcomes and any skipped interaction tests in the release notes.
+
+- [ ] Maya 2027: `mayapy tests/verify_plugin_identity.py` checks English,
+      Chinese and legacy entry points and private translator coexistence.
+- [ ] For metric-export changes: `mayapy tests/verify_metric_module_path.py`
+      and `mayapy tests/verify_maya_units.py` check missing module attributes,
+      source-scene preservation and conversions.
+- [ ] For animation/backend changes: run the relevant private-backend,
+      single/dual, drop, reference-pose and batch-export regressions.
+- [ ] Blender: run applicable assembly, animation and unit tests in Blender
+      5.2+; the project's recorded test host is Windows Blender 5.2.1 LTS.
+- [ ] Distinguish Python 3.7 syntax compatibility (Maya 2022 target) and older
+      Maya 2025 records from this release's actual host coverage.
+
+## Packages
+
+```text
+python scripts/build_release.py <new-output-directory>
+```
+
+- [ ] The fresh directory contains four platform/language ZIPs. For a
+      supplemental Chinese Blender package, use `--blender-zh-only`.
+- [ ] Maya packages contain the private `plug-ins/cod_viewmodel_cast` folder
+      and adjacent loader; no top-level CAST runtime files are distributed.
+- [ ] All packages include licenses and notices; exclude `cast.cfg`, obsolete
+      options files, bytecode, game assets and user preferences.
+- [ ] Expand each Maya package into a disposable directory, then run
+      `mayapy tests/verify_release_package.py <expanded-dir> en|zh-CN`.
+- [ ] With isolated `BLENDER_USER_SCRIPTS`, run each Blender ZIP using
+      `blender --background --factory-startup --python-exit-code 1
+      --python tests/verify_blender_release.py -- <zip>`.
+- [ ] Produce `SHA256SUMS.txt` for the four final tested archives.
+
+## GitHub publication
+
+- [ ] Review the final diff, confirm a clean commit, and push it with the
+      matching version tag to `ez4cywa/cod-viewmodel-toolkit`.
+- [ ] GitHub Actions source/build checks pass for that commit.
+- [ ] Create the versioned release with four tested ZIPs and checksums.
+- [ ] Verify tag/commit, asset names, published state and remote SHA-256
+      digests against local files. Download links on both homepages resolve.
