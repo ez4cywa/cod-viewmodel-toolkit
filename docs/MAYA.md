@@ -80,7 +80,7 @@ setting defaults to on and retains the existing preference key and saved choice.
 
 | Input | Behavior | Prerequisite |
 | --- | --- | --- |
-| Model-only CAST | Adds models, bones and materials in a fresh `cast_import`, `cast_import1`, etc. namespace; does not automatically attach or zero bones. | No toolkit assembly required. |
+| Model-only CAST | Keeps source model, bone and material names. A collision gets an appended number, not a `cast_import:` prefix. Does not automatically attach or zero bones. | No toolkit assembly required. |
 | Animation-only CAST | Uses the existing safe single/dual animation APIs. Dual side comes from `_akimbo_l_` / `_akimbo_r_` filenames or the track signature. | A valid toolkit assembly; no guessing targets on an ordinary skeleton. |
 | Mixed model/animation or Instance container | Rejected before importing content. | Supply separate model-only and animation-only files. |
 
@@ -88,6 +88,14 @@ Original CAST files are not modified. Model imports preserve existing scene
 nodes and materials rather than reusing their same-named counterparts. To
 assemble hands and weapons, use the single/dual builder with the original
 model paths; the general model import is not an attachment operation.
+
+Importing the same model again appends numbers to conflicting names:
+`j_gun` becomes `j_gun1`; an existing trailing digit is retained, so `bone7`
+becomes `bone71`, not `bone8`. Each copy keeps its own bones, materials and skin
+connections. Temporary namespace isolation is internal and is removed after
+the import; no `cast_import` namespace remains. This applies to the default
+menu/drop route. Explicit `import_cast_file(path, namespace="my_model")`
+Python calls retain their namespace behavior for existing scripts.
 
 With built-in drag/drop on, rejected, malformed and multi-file CAST drops do
 not fall back to another translator. Drop one file at a time or use the batch
@@ -164,6 +172,21 @@ the Maya skinning mode; CAST writes `quaternion` mesh metadata and combines
 the original assembled rest model with sampled animation. Export sampling
 does not replace the original animation curves in the working scene. The
 installed/bundled CAST plugin files are not modified by this feature.
+
+CAST model export identifies each influence by its full DAG path, not its short
+joint name. Bones named `joint` under different branches remain separate bones
+with separate parent indices and vertex weights. When names collide in the
+file, the exporter appends numeric suffixes without renaming the working scene.
+It also writes `linear` or `quaternion` mesh skinning metadata, preserving a
+static export's current method instead of silently importing DQS as linear.
+Export fails explicitly if a weighted influence is absent from the exported
+skeleton, a non-joint influence has effective weights, or the mesh uses blended linear/DQS
+skinning that CAST cannot represent equivalently. Include the required joints
+or prepare a supported scene copy; the exporter does not silently assign these
+weights to bone zero or convert the live scene.
+Animation export also conservatively rejects duplicate joint leaf names in the
+export scope, including animation-only exports and unkeyed duplicate joints.
+Use unique bone names in a scene copy rather than ambiguous animation tracks.
 
 SMD v1 does not store frame rate, scale, or shear. Read the frame rate from
 the JSON manifest and set it in the target application. Non-unit joint scale
@@ -243,7 +266,7 @@ the remaining animation is still imported.
 | Support level | Environment | Status |
 | --- | --- | --- |
 | Minimum expected | Maya 2022, Python 3.7.7, private patched CAST 2.01 | Python 3.7 syntax/API compatibility target; no full Maya 2022 host regression. |
-| Current verification | Maya 2027, Python 3.13.9, private patched CAST 2.01, Windows | 3.6.0 optional-output and standalone-export tests passed; English and Chinese source entries each completed eight real exports. An installed-entry animation check sampled 239 frames. Native GUI interaction was not verified this round. |
+| Current verification | Maya 2027, Python 3.13.9, private patched CAST 2.01, Windows | See the [3.6.1 verification scope](RELEASE_NOTES_3.6.1.md#验证范围) for current results. The [3.6.0 record](RELEASE_NOTES_3.6.0.md) remains historical evidence, not acceptance of the new naming or skin-export changes. |
 | Historical verification | Maya 2025, Python 3.11.4, earlier bundled CAST versions, Windows | Prior releases verified single/dual workflows, localization and exports; not re-tested for 3.5.0. |
 
 Maya 2022 on Windows or Linux can also be launched in Python 2 mode; this
@@ -262,6 +285,8 @@ interpreter:
 
 ```powershell
 python tests/verify_vendored_cast.py
+python tests/verify_empty_material_references.py
+python tests/verify_cast_import_names.py
 mayapy tests/verify_plugin_identity.py
 mayapy tests/verify_reference_pose_compensation.py
 mayapy tests/verify_batch_animation_export.py
@@ -271,6 +296,8 @@ mayapy tests/verify_private_cast_backend.py
 mayapy tests/verify_animation_read_session.py
 mayapy tests/verify_maya_drop_module_path.py
 mayapy tests/verify_cast_import_gateway.py
+mayapy tests/verify_cast_duplicate_names.py
+mayapy tests/verify_skin_weight_roundtrip.py
 mayapy tests/verify_optional_outputs.py
 python tests/verify_standalone_exports.py
 python tests/verify_standalone_export_ui.py
@@ -286,11 +313,15 @@ unit conversion, non-overwriting filenames and live-scene preservation. Use
 `--plugin <entry-path>` to test an installed English, Chinese or legacy entry.
 The optional-output test covers all-off single/dual/quick builds, one-time
 preference migration, first save and batch rejection with no selected format.
-The CAST gateway regression passed on Maya 2027 in the source, installed Chinese
-entry and Chinese release package. It checks isolated model namespaces/materials,
-safe single/dual routing, unsupported-input rejection, failure cleanup and absence
-of an external CAST dependency. See the release notes for the verification scope.
-See [3.6.0 notes](RELEASE_NOTES_3.6.0.md) and the [release checklist](RELEASE_CHECKLIST.md)
+The CAST gateway regression checks original-name imports, numeric collision
+suffixes, independent repeated models/materials, safe single/dual routing,
+unsupported-input rejection, failure cleanup and no external CAST dependency.
+Explicit namespace API calls remain a separate compatibility case. Test the
+source entry, installed entry and packaged entry separately; ordinary Maya File
+Import is not gateway coverage. CAST skinning regressions must also compare
+bone identities, complete per-vertex weights and deformation after export and
+reimport, not only mesh counts. See the release notes for actual results.
+See [3.6.1 notes](RELEASE_NOTES_3.6.1.md) and the [release checklist](RELEASE_CHECKLIST.md)
 for this release; prior [backend measurements](CAST_BACKEND_BENCHMARK.md) and the
 [3.2.0 verification](VERIFICATION_3.2.0.md) records historical CAST 2.00/native UI checks.
 

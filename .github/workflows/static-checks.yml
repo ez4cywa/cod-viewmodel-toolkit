@@ -24,6 +24,10 @@ jobs:
         run: python tests/verify_source_contracts.py
       - name: Verify bundled CAST translator
         run: python tests/verify_vendored_cast.py
+      - name: Verify optional CAST material references
+        run: python tests/verify_empty_material_references.py
+      - name: Verify CAST original names and numeric collision suffixes
+        run: python tests/verify_cast_import_names.py
       - name: Verify bundled Blender CAST backend
         run: python tests/verify_vendored_blender_cast.py
       - name: Verify release building and localization

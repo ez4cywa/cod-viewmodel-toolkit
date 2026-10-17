@@ -17,16 +17,31 @@ while retaining this license and patch record under `third_party/cast`.
 - Unmodified `cast.py` SHA-256:
   `d1ff7fcb2a184f208b21be34485d1863834ae33811078a28a2ccf6ff61f2c577`
 
-The bundled `cast.py` is byte-for-byte identical to the upstream v2.00/v2.01
-releases (the serializer did not change). The bundled `castplugin.py` is a project-maintained patch with
+The bundled `cast.py` is based on the unchanged v2.00/v2.01 serializer with the
+optional-material compatibility patch described below. Its bundled SHA-256 is
+`633ab934360aeb04e74eb72e9ad014b5bb8d56acbe452ca1fc4f0166b46231c6`.
+The bundled `castplugin.py` is a project-maintained patch with
 SHA-256
-`4d1774f51343078d6e36efb2eeea55b800f368b3a3b2576b614635003945a65d`.
+`bcf5d84ff772d18dc56e6b4af84daf06c7e44c9ea13c44c9dcbb2e02092da656`.
 
 The v2.01 Maya change was selectively merged on top of the ten existing local
 patches: [fix skeleton export parent indices](https://github.com/dtzxporter/cast/commit/02a759082b22e278ba8cc2aff4df9169bdfb2195).
 Parent lookup now uses the immediate parent joint and full DAG paths, including
 joints under non-joint rig groups. This is a correctness fix, not an import
 performance claim. Latest-release status was checked on 2026-09-24.
+
+## Local changes to `cast.py`
+
+`Mesh.Material()` and `Hair.Material()` treat a present but empty optional `m`
+reference as absent, returning `None`. Exporters may encode an unassigned
+material with a zero-element property instead of omitting it. This avoids an
+`IndexError` and reuses the importers' existing default-material behavior.
+Valid and unresolved hashes, first-value selection, and all binary loading and
+saving behavior are unchanged; the getter does not modify the document.
+
+`tests/verify_empty_material_references.py` covers these contracts with real
+in-memory binary round trips. `tests/verify_empty_material_host.py` checks Maya
+default-material assignment, geometry/skin preservation and scene-only attachment.
 
 ## Local changes to `castplugin.py`
 
@@ -88,10 +103,29 @@ performance claim. Latest-release status was checked on 2026-09-24.
     This avoids aborting texture imports in hosts without ShaderFX loaded.
     Constant-color slots load Maya's bundled `lookdevKit` when `colorConstant`
     is not registered, rather than creating an unknown node in a clean profile.
+18. Use complete DAG paths for exported skeleton identities and skin influence
+    lookup. Different branches may contain same-named joints with independent
+    weights. Preserve all identities and append numeric suffixes to duplicate
+    CAST bone names without consuming another bone's original name or renaming
+    the live scene. Emit each mesh's explicit `linear` / `quaternion` method.
+19. Reject weighted influences missing from the exported skeleton, non-joint
+    influences with effective weights, and blended skinning that CAST cannot
+    represent. Do not silently redirect unrepresentable weights to bone zero.
+    Animated exports with ambiguous joint names are rejected before writing,
+    rather than emitting animation tracks inconsistent with renamed model bones.
 
-`tests/verify_cast_import_gateway.py` covers isolated model nodes and material
+`tests/verify_skin_weight_roundtrip.py` checks sparse logical influence indices,
+same-named DAG joints, all vertex weights, geometry, topology and linear / DQS
+round trips, as well as explicit rejection of unsupported skin exports.
+
+`tests/verify_cast_import_gateway.py` covers isolated model creation and material
 connections, existing scene preservation, safe single/dual animation, explicit
 rejection without external fallback, and operation namespace/option restoration.
+The toolkit publishes default model imports at the root with original names or
+append-only numeric suffixes, removes its staging namespace, and preserves skin
+connections by UUID. Explicit namespace API callers retain isolation.
+`tests/verify_cast_duplicate_names.py` checks full duplicate-model weight
+independence and rollback after a failure partway through root publication.
 
 `tests/verify_cast_v201.py` covers grouped-joint export parent indices, absolute /
 relative / additive mapped animation (translation and quaternion), existing

@@ -3021,7 +3021,9 @@ def exportModel(root, exportSelected, filePath):
         joint = OpenMayaAnim.MFnIkJoint(utilityGetDagPath(jointPathName))
         jointName = joint.name()
 
-        if jointName in uniqueBones:
+        # DAG leaf names are not identities: different branches can legally
+        # contain joints with the same name and different vertex weights.
+        if jointPathName in uniqueBones:
             continue
 
         parentStack.append((jointName, jointPathName, utilityBoneParent(joint)))
@@ -3048,7 +3050,7 @@ def exportModel(root, exportSelected, filePath):
         segmentScaleCompensate = \
             bool(cmds.getAttr("%s.segmentScaleCompensate" % joint.fullPathName()))
 
-        uniqueBones[jointName] = [
+        uniqueBones[jointPathName] = [
             # Parent index in the parent stack.
             -1,
             # Segment scale compensate.
@@ -3069,22 +3071,36 @@ def exportModel(root, exportSelected, filePath):
             # Index in the final bone array.
             0]
 
-    for (boneName, _, boneParent) in parentStack:
+    for (_, bonePath, boneParent) in parentStack:
         if boneParent:
-            uniqueBones[boneName][0] = \
+            uniqueBones[bonePath][0] = \
                 utilityBoneIndex(parentStack, boneParent)
 
     if parentStack:
         skeleton = model.CreateSkeleton()
 
-        for (boneName, _, _) in parentStack:
-            joint = uniqueBones[boneName]
+        reservedNames = {entry[0] for entry in parentStack}
+        exportedNames = set()
+        for (boneName, bonePath, _) in parentStack:
+            joint = uniqueBones[bonePath]
             joint[7] = uniqueBoneIndex
 
             uniqueBoneIndex += 1
 
+            # CAST consumers identify animation/vertex groups by bone name.
+            # Keep original names where possible without merging identities.
+            exportName = boneName
+            suffix = 1
+            while exportName in exportedNames:
+                exportName = "%s%d" % (boneName, suffix)
+                suffix += 1
+                while exportName in reservedNames:
+                    exportName = "%s%d" % (boneName, suffix)
+                    suffix += 1
+            exportedNames.add(exportName)
+
             bone = skeleton.CreateBone()
-            bone.SetName(boneName)
+            bone.SetName(exportName)
             bone.SetParentIndex(joint[0])
             bone.SetSegmentScaleCompensate(joint[1])
 
@@ -3161,6 +3177,13 @@ def exportModel(root, exportSelected, filePath):
 
         if skinCluster:
             skinCluster.influenceObjects(skinJoints)
+            skinningMethod = cmds.getAttr(skinCluster.name() + ".skinningMethod")
+            if skinningMethod not in (0, 1):
+                raise RuntimeError(
+                    "CAST cannot represent blended skinning on %s; "
+                    "choose linear or dual quaternion before export." % meshPath)
+            meshNode.SetSkinningMethod(
+                "quaternion" if skinningMethod == 1 else "linear")
 
         vertexIter = OpenMaya.MItMeshVertex(transformDagPath)
         vertexCount = vertexIter.count()
@@ -3179,25 +3202,17 @@ def exportModel(root, exportSelected, filePath):
         numWeights = OpenMaya.MScriptUtil()
         numWeightsPtr = numWeights.asUintPtr()
         weights = OpenMaya.MDoubleArray()
-        bones = [0] * skinJoints.length()
+        bones = [None] * skinJoints.length()
 
         # Create weight index to bone index lookup.
         for index in xrange(skinJoints.length()):
             jointDagPath = skinJoints[index]
 
             if not jointDagPath.hasFn(OpenMaya.MFn.kJoint):
-                cmds.warning("Skipping non-joint influence object: %s" %
-                             jointDagPath.partialPathName())
                 continue
 
-            joint = OpenMayaAnim.MFnIkJoint(jointDagPath)
-            jointName = joint.name()
-
-            try:
-                bones[index] = uniqueBones[jointName][7]
-            except KeyError:
-                cmds.warning("Skipping joint not in skeleton: %s" % jointName)
-                pass
+            if jointDagPath.fullPathName() in uniqueBones:
+                bones[index] = uniqueBones[jointDagPath.fullPathName()][7]
 
         uv.createFromList([0.0, 0.0], 2)
         uvPtr = uv.asFloat2Ptr()
@@ -3259,6 +3274,19 @@ def exportModel(root, exportSelected, filePath):
 
                 for vindex in xrange(weights.length()):
                     if weights[vindex] > WEIGHT_THRESHOLD:
+                        # Never silently redirect unsupported/missing influences
+                        # to bone zero and emit a plausible but corrupted rig.
+                        if bones[vindex] is None:
+                            influencePath = skinJoints[vindex]
+                            if not influencePath.hasFn(OpenMaya.MFn.kJoint):
+                                raise RuntimeError(
+                                    "Non-joint skin influence %s on %s cannot "
+                                    "be exported as a CAST bone." %
+                                    (influencePath.fullPathName(), meshPath))
+                            raise RuntimeError(
+                                "Skin influence %s on %s is missing from exported "
+                                "skeleton; include its joints in the export selection." %
+                                (influencePath.fullPathName(), meshPath))
                         influence += 1
 
                 vertexMaxInfluence = max(vertexMaxInfluence, influence)
@@ -3348,6 +3376,18 @@ def exportCast(path, exportSelected):
         cmds.currentUnit(angle="rad")
 
         if sceneSettings["exportAnim"]:
+            # The model writer can uniquify duplicate DAG leaf names, but CAST
+            # animation tracks cannot identify which same-named bone they mean.
+            # Reject before generating mismatched tracks instead of guessing.
+            jointNames = set()
+            for jointPath in cmds.ls(type="joint", selection=exportSelected,
+                                     long=True) or []:
+                jointName = jointPath.rsplit("|", 1)[-1]
+                if jointName in jointNames:
+                    raise RuntimeError(
+                        "CAST animation export has duplicate bone names: %s; "
+                        "give those joints unique names before export." % jointName)
+                jointNames.add(jointName)
             exportAnimation(root, exportSelected)
 
         if sceneSettings["exportModel"]:

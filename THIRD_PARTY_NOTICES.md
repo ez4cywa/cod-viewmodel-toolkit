@@ -9,10 +9,11 @@ translators from [dtzxporter/cast](https://github.com/dtzxporter/cast).
 - License: MIT
 - Upstream license: <https://github.com/dtzxporter/cast/blob/v2.01/LICENSE>
 
-The repository includes `third_party/cast/cast.py` and a modified
+The repository includes project-patched `third_party/cast/cast.py` and
 `third_party/cast/castplugin.py`, based on upstream release v2.01 at
 commit `363cb39c0425844e29bf4c2457bbbb1d2b9bb4c6`, with the project's existing
-local patches retained. The serializer is unchanged between v2.00 and v2.01.
+local patches retained. The upstream serializer is identical between v2.00 and
+v2.01; this project's copy additionally handles empty optional material references.
 Maya release archives place these files in the private `plug-ins/cod_viewmodel_cast`
 directory, loaded through `cod_viewmodel_cast_backend.py`. They do not replace an
 independently installed CAST translator or its preferences. The upstream MIT
@@ -26,7 +27,7 @@ The Blender backend in `third_party/cast_blender` remains based on v2.00 commit
 `a8ca18a0acf3b97b19332c53b54b47fcc3217755`; its algorithms are unchanged in the
 toolkit 3.5.0 release.
 Its baseline and local changes are recorded in `third_party/cast_blender/PATCHES.md`.
-Blender archives include this backend, the unmodified shared serializer and
+Blender archives include this backend, the project-patched shared serializer and
 the upstream MIT license inside `cod_viewmodel_toolkit/vendor_cast`.
 
 Blender itself and its built-in FBX add-on are not redistributed. The toolkit

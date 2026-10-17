@@ -67,13 +67,19 @@ CAST 2.01 修复变换组下骨架导出的父索引。本项目另修复多条�
 
 | 输入 | 行为 | 前提 |
 | --- | --- | --- |
-| 纯模型 CAST | 模型、骨骼和材质进入新命名空间 `cast_import`、`cast_import1` 等；不自动挂载、不清零骨骼。 | 无需工具包组装。 |
+| 纯模型 CAST | 保留模型、骨骼和材质原名；冲突只追加数字，不添加 `cast_import:`；不自动挂载、不清零骨骼。 | 无需工具包组装。 |
 | 纯动画 CAST | 沿用单武器／双持安全动画接口；双持通过 `_akimbo_l_`／`_akimbo_r_` 文件名或轨道特征识别侧别。 | 已有有效工具包组装，不在普通骨架中猜测目标。 |
 | 模型／动画混合容器或 Instance 容器 | 导入内容前明确拒绝。 | 请分别提供纯模型与纯动画文件。 |
 
 原 CAST 文件不会被修改。模型导入保留场景中已有节点与材质，不复用它们的同名
 对象。需要挂载手臂与武器时，在单武器／双持构建器中选择原模型路径；普通模型
 导入不是挂载操作。
+
+重复导入同一模型时，重名只在原名称末尾追加数字：`j_gun` → `j_gun1`；原名称
+末尾已有数字也保留，例如 `bone7` → `bone71`，不是 `bone8`。各副本的骨骼、材质
+和蒙皮连接独立。命名空间仅用于内部临时隔离，导入后清除，不在场景留下
+`cast_import`。这适用于默认菜单／拖放入口；已有 Python 脚本显式调用
+`import_cast_file(path, namespace="my_model")` 的行为继续兼容。
 
 内置拖放开启时，不支持、损坏或多文件 CAST 拖放不会转交其他转换器。请一次
 拖入一个文件，队列任务使用批量工具。关闭该设置后，Maya 恢复默认拖放处理；
@@ -140,6 +146,16 @@ CAST 2.01 修复变换组下骨架导出的父索引。本项目另修复多条�
 组合保存，避免将动画首帧误当成绑定姿态。导出采样不会替换工作场景中的原始
 动画曲线；本功能不修改本机或内置的 CAST 插件文件。
 
+CAST 模型导出按完整 DAG 路径识别每个影响骨骼，不用骨骼短名作为唯一标识。
+不同分支中同名的 `joint` 保持独立的骨骼、父索引和顶点权重；文件内名称冲突
+只添加数字后缀，不重命名工作场景。导出同时明确写入 `linear` 或 `quaternion`
+蒙皮标记，保留静态导出的当前方式，避免 DQS 重新导入后默认为线性蒙皮。
+有实际权重的影响项未包含在导出骨架中、非关节影响项带有效权重，或使用 CAST 无法等价
+表达的混合线性／DQS 蒙皮时，导出会明确报错。请补全必要关节或准备受支持的
+场景副本；不会静默把这些权重指向第 0 根骨骼，也不自动转换工作场景。
+动画导出还会保守拒绝导出范围中同叶名的关节；仅动画导出及未打关键帧的同名
+关节也在检查范围。请先在场景副本中使用唯一骨名，不导出对应关系含糊的轨道。
+
 SMD v1 不保存帧率、缩放或剪切。帧率写入 JSON 清单，目标软件需据此设置。
 如关节包含非单位缩放或剪切，该 SMD 输出会明确报错，但不影响其他勾选格式。
 SMD 位移默认采用厘米（显式选择米制输出时采用米），旋转采用 XYZ 欧拉角、弧度单位。
@@ -199,7 +215,7 @@ Python 接口：`batch_export_animations(hands, weapon, animation_paths, options
 | 支持级别 | 环境 | 状态 |
 | --- | --- | --- |
 | 预期最低版本 | Maya 2022、Python 3.7.7、私有补丁版 CAST 2.01 | Python 3.7 语法与 API 兼容性目标；未在 Maya 2022 执行完整宿主回归。 |
-| 当前验证版本 | Maya 2027、Python 3.13.9、私有补丁版 CAST 2.01、Windows | 3.6.0 可选输出与独立导出检查通过；源码中英文入口各完成 8 项真实导出。安装入口动画检查采样 239 帧，本轮未验收原生 GUI 交互。 |
+| 当前验证版本 | Maya 2027、Python 3.13.9、私有补丁版 CAST 2.01、Windows | 当前结果见 [3.6.1 验证范围](RELEASE_NOTES_3.6.1.md#验证范围)；[3.6.0 记录](RELEASE_NOTES_3.6.0.md)仅为历史证据，不代表本次命名和蒙皮导出改动已经验收。 |
 | 历史验证版本 | Maya 2025、Python 3.11.4、此前内置 CAST 版本、Windows | 旧版验证过单武器、双持、中文界面和导出；3.5.0 未在此版本重新测试。 |
 
 Windows 或 Linux 版 Maya 2022 也可以用 Python 2 模式启动；本工具包必须在
@@ -215,6 +231,8 @@ Python 3 模式下运行。Maya 2021 及更早版本不受支持。最低版本�
 
 ```powershell
 python tests/verify_vendored_cast.py
+python tests/verify_empty_material_references.py
+python tests/verify_cast_import_names.py
 mayapy tests/verify_plugin_identity.py
 mayapy tests/verify_reference_pose_compensation.py
 mayapy tests/verify_batch_animation_export.py
@@ -224,6 +242,8 @@ mayapy tests/verify_private_cast_backend.py
 mayapy tests/verify_animation_read_session.py
 mayapy tests/verify_maya_drop_module_path.py
 mayapy tests/verify_cast_import_gateway.py
+mayapy tests/verify_cast_duplicate_names.py
+mayapy tests/verify_skin_weight_roundtrip.py
 mayapy tests/verify_optional_outputs.py
 python tests/verify_standalone_exports.py
 python tests/verify_standalone_export_ui.py
@@ -237,10 +257,12 @@ mayapy tests/verify_standalone_export_host.py
 工作场景保留，可用 `--plugin <入口路径>` 检查已安装的中英文或旧入口。
 可选输出测试覆盖单武器／双持／快速挂载的无磁盘输出、一次偏好迁移、首次保存，
 以及未选择格式时批量导出的拒绝行为。
-新增 CAST 导入入口已在 Maya 2027 的源码、安装版中文入口及中文安装包通过回归。
-测试检查模型与材质命名空间隔离、单武器／双持安全匹配、不支持输入的拒绝、
-失败清理，以及不依赖外部 CAST 插件；完整验证范围见更新说明。
-本版检查见 [3.6.0 更新说明](RELEASE_NOTES_3.6.0.md)和[发布清单](RELEASE_CHECKLIST.md)；
+CAST 导入入口回归检查原名导入、数字冲突后缀、重复模型与材质独立、单武器／
+双持安全匹配、不支持输入的拒绝、失败清理，以及不依赖外部 CAST 插件。显式
+命名空间 API 调用单独检查兼容性。源码、已安装入口与包内入口须分别验收，
+普通 Maya“文件 → 导入”不属于入口覆盖。蒙皮回归还须比较导出再导入后的骨骼
+身份、完整逐顶点权重和变形，不能只检查网格数量；实际结果见更新说明。
+本版检查见 [3.6.1 更新说明](RELEASE_NOTES_3.6.1.md)和[发布清单](RELEASE_CHECKLIST.md)；
 此前的[后端测量记录](CAST_BACKEND_BENCHMARK.md)保留。CAST 2.00 与原生界面历史检查见
 [3.2.0 验证记录](VERIFICATION_3.2.0.md)。
 

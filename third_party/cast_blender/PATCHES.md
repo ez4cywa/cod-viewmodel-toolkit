@@ -12,9 +12,15 @@ source tree and at `vendor_cast/LICENSE` in the Blender ZIP.
 | `export_cast.py` | `a301b72f05f454bf7545119060919a71e76d7a3d95305be5380a825747d7784d` | `d62c9b2698e3e0f6619311fdacf1959105f25c36a48d9407bb2bd3fbca1e54c1` |
 | `shared_cast.py` | `8f65cc1a4ee055127ecd202c65a10db2e3ceb3ba8d9273ca08888d3d4b9645ed` | same |
 
-The shared `cast.py` serializer is unmodified upstream v2.00, SHA-256
-`d1ff7fcb2a184f208b21be34485d1863834ae33811078a28a2ccf6ff61f2c577`.
-It is stored in `third_party/cast` and included in each runtime package.
+The shared `cast.py` serializer is based on upstream v2.00/v2.01 (upstream SHA-256
+`d1ff7fcb2a184f208b21be34485d1863834ae33811078a28a2ccf6ff61f2c577`).
+The bundled SHA-256 is
+`633ab934360aeb04e74eb72e9ad014b5bb8d56acbe452ca1fc4f0166b46231c6`.
+It is stored in `third_party/cast` and included in each runtime package. Its only
+local change is that Mesh/Hair optional empty material references return `None`
+instead of raising `IndexError`; Blender already supports this unassigned-material
+case. Binary reading/writing and valid-reference behavior are unchanged. See
+`../cast/PATCHES.md` and `tests/verify_empty_material_references.py` in the source tree.
 
 ## Local changes
 

@@ -45,14 +45,14 @@ flowchart LR
 
 ## 下载与安装
 
-当前版本 **3.6.0**：Maya 四项输出默认全部关闭，可先只挂载、再按需选择格式；**导入 CAST…** 与内置拖放使用私有后端，无需另装 CAST 插件。单独 FBX/SMD 导出在隔离场景副本中输出静态模型或当前动画。Blender 行为保持原样。详见[更新说明](docs/RELEASE_NOTES_3.6.0.md)。
+当前版本 **3.6.1**：Maya 模型导入保留原名，不再添加 `cast_import:`，重名只追加数字；CAST 导出不再合并不同 DAG 分支的同名骨骼，正确保留权重与线性／双四元数蒙皮标记。空材质引用改用默认材质。Blender 本次仅接收共享材质读取修复并对齐版本，不包含 Maya 命名或权重导出改动。详见[更新说明](docs/RELEASE_NOTES_3.6.1.md)。
 
 | 平台 | 简体中文 ZIP | English ZIP | 运行环境 |
 | --- | --- | --- | --- |
-| Maya | [下载](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/download/3.6.0/cod-viewmodel-toolkit-3.6.0-maya-zh-CN.zip) | [Download](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/download/3.6.0/cod-viewmodel-toolkit-3.6.0-maya-en.zip) | 当前验证环境为 Windows Maya 2027；旧版已验证 Maya 2025；目标支持 Maya 2022+ 的 Python 3 模式。 |
-| Blender | [下载](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/download/3.6.0/cod-viewmodel-toolkit-3.6.0-blender-zh-CN.zip) | [Download](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/download/3.6.0/cod-viewmodel-toolkit-3.6.0-blender-en.zip) | 要求 Blender 5.2+；安装包验证环境为 Windows Blender 5.2.1 LTS。 |
+| Maya | [下载](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/download/3.6.1/cod-viewmodel-toolkit-3.6.1-maya-zh-CN.zip) | [Download](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/download/3.6.1/cod-viewmodel-toolkit-3.6.1-maya-en.zip) | 当前验证环境为 Windows Maya 2027；旧版已验证 Maya 2025；目标支持 Maya 2022+ 的 Python 3 模式。 |
+| Blender | [下载](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/download/3.6.1/cod-viewmodel-toolkit-3.6.1-blender-zh-CN.zip) | [Download](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/download/3.6.1/cod-viewmodel-toolkit-3.6.1-blender-en.zip) | 要求 Blender 5.2+；安装包验证环境为 Windows Blender 5.2.1 LTS。 |
 
-请选择对应**平台和语言的 ZIP**，不要将 GitHub 自动生成的“Source code”源码包当作安装包。Release 同时提供 [SHA-256 校验文件](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/download/3.6.0/SHA256SUMS.txt)。正常使用由宿主自带 Python 运行，无需另装 Python。
+请选择对应**平台和语言的 ZIP**，不要将 GitHub 自动生成的“Source code”源码包当作安装包。Release 同时提供 [SHA-256 校验文件](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/download/3.6.1/SHA256SUMS.txt)。正常使用由宿主自带 Python 运行，无需另装 Python。
 
 ### Maya
 
@@ -87,7 +87,7 @@ flowchart LR
 | 批量导出 | 使用 **Single Animation Batch... / Dual Animation Batch...**。 | 在 **Animation Batch** 中使用 **Start Batch Export**。 |
 | 单独导出一个文件 | 使用 **Export FBX... / Export SMD...**，选择静态／当前动画、帧范围和单位。 | 选择组装体所需输出格式并导出。 |
 
-Maya 的 **导入 CAST…** 将模型放入新的命名空间（`cast_import`、`cast_import1` 等），不清零骨骼，也不自动挂载。纯动画文件要求有效的单武器或双持工具包组装，不会在普通骨架中猜测目标。模型与动画混合容器、Instance 容器暂不支持，请分开提供纯模型和纯动画文件。**内置 CAST 拖入处理** 默认开启：不支持、损坏或多文件 CAST 拖放会明确拒绝，不转交其他导入器；关闭后恢复 Maya 默认拖放。Maya 普通 **文件 → 导入** 和外部 `Cast` 转换器不在此入口的保护范围内。详见 [CAST 导入说明](docs/MAYA.zh-CN.md#无需另装插件导入-cast)。
+Maya 的 **导入 CAST…** 与内置模型拖放保留源名称，不添加 `cast_import:`。名称已存在时只在末尾追加数字，例如 `j_gun` → `j_gun1`、`bone7` → `bone71`。重复模型的骨骼、材质与蒙皮连接各自独立，内部临时隔离不会在场景留下命名空间；不清零骨骼，也不自动挂载。Python API 显式传入的 `namespace` 参数继续兼容。纯动画文件要求有效的单武器或双持工具包组装，不会在普通骨架中猜测目标。模型与动画混合容器、Instance 容器暂不支持，请分开提供纯模型和纯动画文件。**内置 CAST 拖入处理** 默认开启：不支持、损坏或多文件 CAST 拖放会明确拒绝，不转交其他导入器；关闭后恢复 Maya 默认拖放。Maya 普通 **文件 → 导入** 和外部 `Cast` 转换器不在此入口的保护范围内。详见 [CAST 导入说明](docs/MAYA.zh-CN.md#无需另装插件导入-cast)。
 
 表内保留英文控件名，中文版对应“检查输入”“组装模型”“替换左／右动画”等操作。Maya 批量任务从独立场景开始，提示保存时先保存当前工作。Blender 创建专用组装集合，只导出所选组装，不带出无关对象。Blender 动画通过工具包面板导入，不能把 Maya 的内置外部文件拖放能力视为两端共有功能。
 
@@ -106,6 +106,8 @@ Maya 的 **导入 CAST…** 将模型放入新的命名空间（`cast_import`、
 | JSON | 输入、验证结果、输出路径、警告和批次结果 | 验证报告，不是模型或动画格式。 |
 
 Maya 动画流程明确设置 DQS，纯静态 Maya 导出不强制转换。独立 FBX／SMD 导出使用隔离的 Maya 场景副本，米制转换与动画 FBX 的 DQS 设置只作用于副本，不改变工作场景。已有输出不会覆盖：Maya 自动使用 `_v001` 等版本后缀，Blender 使用 `_001`；每种启用格式可指定独立目录。
+
+Maya CAST 导出按完整 DAG 路径识别骨骼，不会把不同分支的同名骨骼合并为同一个影响项。文件内重名骨骼使用数字后缀，不改工作场景名称或合并权重；导出器明确记录当前线性或双四元数蒙皮方式，避免丢失 DQS 标记。
 
 **单位：**默认“保持原单位”。选择“米（输入：英尺）”时，以 `1 ft = 0.3048 m` 换算输出副本，不会自动识别任意 CAST 的单位。Maya FBX 的存储元数据可能仍标为厘米，但实际换算尺寸正确；再次缩放前请看[输出单位说明](docs/OUTPUT_UNITS.md)。
 
@@ -144,6 +146,8 @@ Maya 动画流程明确设置 DQS，纯静态 Maya 导出不强制转换。独�
 git clone https://github.com/ez4cywa/cod-viewmodel-toolkit.git
 cd cod-viewmodel-toolkit
 python tests/verify_vendored_cast.py
+python tests/verify_empty_material_references.py
+python tests/verify_cast_import_names.py
 python tests/verify_vendored_blender_cast.py
 mayapy tests/verify_plugin_identity.py
 mayapy tests/verify_private_cast_backend.py
@@ -151,6 +155,8 @@ mayapy tests/verify_cast_v201.py
 mayapy tests/verify_animation_read_session.py
 mayapy tests/verify_maya_drop_module_path.py
 mayapy tests/verify_cast_import_gateway.py
+mayapy tests/verify_cast_duplicate_names.py
+mayapy tests/verify_skin_weight_roundtrip.py
 mayapy tests/verify_optional_outputs.py
 python tests/verify_standalone_exports.py
 python tests/verify_standalone_export_ui.py
@@ -160,7 +166,7 @@ python scripts/build_release.py ../release-output
 
 `mayapy` 是 Maya 自带的 Python，可用完整路径调用。构建命令生成**四个**平台／语言 ZIP，不覆盖已有压缩包。源码安装方法见 [Maya](docs/MAYA.zh-CN.md#安装)和 [Blender](docs/BLENDER.zh-CN.md) 使用说明。
 
-GitHub Actions 检查源码语法、全部 Maya 运行文件的 Python 3.7 语法、后端完整性、独立导出与界面契约、构建失败清理、中文转换、包内容及构建可重复性，**不运行 Maya 或 Blender**。宿主验证见[本版说明](docs/RELEASE_NOTES_3.6.0.md)和[发布清单](docs/RELEASE_CHECKLIST.md)；此前的[后端测量](docs/CAST_BACKEND_BENCHMARK.md)与[米制输出记录](docs/VERIFICATION_3.4.0.md)仍可查阅。Maya 2022 是语法与 API 兼容性目标，不代表已在该版本执行完整回归。
+GitHub Actions 检查源码语法、全部 Maya 运行文件的 Python 3.7 语法、后端完整性、独立导出与界面契约、构建失败清理、中文转换、包内容及构建可重复性，**不运行 Maya 或 Blender**。宿主验证见[本版说明](docs/RELEASE_NOTES_3.6.1.md)和[发布清单](docs/RELEASE_CHECKLIST.md)；此前的[后端测量](docs/CAST_BACKEND_BENCHMARK.md)与[米制输出记录](docs/VERIFICATION_3.4.0.md)仍可查阅。Maya 2022 是语法与 API 兼容性目标，不代表已在该版本执行完整回归。
 
 ## 项目结构
 

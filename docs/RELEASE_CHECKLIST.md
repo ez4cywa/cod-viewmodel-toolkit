@@ -11,6 +11,8 @@ Run from the repository root with ordinary Python (no host installation needed):
 ```text
 python tests/verify_source_contracts.py
 python tests/verify_vendored_cast.py
+python tests/verify_empty_material_references.py
+python tests/verify_cast_import_names.py
 python tests/verify_vendored_blender_cast.py
 python tests/verify_build_release.py
 python tests/verify_standalone_exports.py
@@ -42,10 +44,29 @@ test outcomes and any skipped interaction tests in the release notes.
 - [ ] For animation/backend changes: run the relevant private-backend,
       single/dual, drop, reference-pose and batch-export regressions.
 - [ ] For the CAST gateway: `mayapy tests/verify_cast_import_gateway.py`
-      verifies private-only imports, real fresh model namespaces/material
-      isolation, single/dual routing, rejection of unsupported or ambiguous
-      inputs, and no fallback for rejected CAST drops. Record the exact entry
-      paths tested; ordinary Maya File Import is not gateway coverage.
+      verifies private-only imports, no default `cast_import:` prefix, original
+      names on first import and append-only numeric collisions (`bone7` →
+      `bone71`). Repeated models must retain independent bones/materials/skin
+      connections, preserve existing nodes and leave no temporary namespaces.
+      Also check explicit namespace API compatibility, single/dual routing,
+      rejection of unsupported or ambiguous inputs, and no fallback for rejected
+      CAST drops. Record exact entry paths; ordinary File Import is not coverage.
+- [ ] Run `mayapy tests/verify_cast_duplicate_names.py` for repeated model
+      naming/graph checks and `mayapy tests/verify_skin_weight_roundtrip.py`
+      for CAST skin export: compare full bone identities, parent indices,
+      per-vertex weights and posed deformation after export/reimport. Include
+      distinct DAG bones with the same short name, numeric names, repeated model
+      imports and sparse/reordered influences. Confirm exported names are unique
+      without renaming the live scene, and `linear` / `quaternion` metadata
+      survives. Run focused regressions against source, installed and package
+      entries; a successful package load or mesh-count check is insufficient.
+      Missing weighted bones, effectively weighted non-joint influences and unsupported blended
+      skinning must fail explicitly, not fall back to bone zero.
+      Duplicate joint leaf names must conservatively reject animation export,
+      including animation-only and unkeyed duplicates, before writing a file.
+- [ ] Empty optional Mesh/Hair material references must not raise `IndexError`;
+      model meshes without a material use the default material. Check missing,
+      empty, valid and unresolved references without modifying source files.
 - [ ] For output-default changes: `mayapy tests/verify_optional_outputs.py`
       checks all-off single/dual/quick builds, preference migration, first save
       and rejecting a batch with no selected format.

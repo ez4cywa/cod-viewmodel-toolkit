@@ -11,10 +11,10 @@ CAST_MODULE = CAST_DIR / "cast.py"
 CAST_PLUGIN = CAST_DIR / "castplugin.py"
 
 CAST_MODULE_SHA256 = (
-    "d1ff7fcb2a184f208b21be34485d1863834ae33811078a28a2ccf6ff61f2c577"
+    "633ab934360aeb04e74eb72e9ad014b5bb8d56acbe452ca1fc4f0166b46231c6"
 )
 CAST_PLUGIN_SHA256 = (
-    "4d1774f51343078d6e36efb2eeea55b800f368b3a3b2576b614635003945a65d"
+    "bcf5d84ff772d18dc56e6b4af84daf06c7e44c9ea13c44c9dcbb2e02092da656"
 )
 
 
@@ -37,7 +37,7 @@ def main():
         _parse_as_python37(source, path)
 
     if _sha256(CAST_MODULE) != CAST_MODULE_SHA256:
-        raise RuntimeError("Bundled cast.py differs from the unchanged upstream v2.01 serializer")
+        raise RuntimeError("Bundled patched cast.py changed unexpectedly")
     if _sha256(CAST_PLUGIN) != CAST_PLUGIN_SHA256:
         raise RuntimeError("Bundled patched castplugin.py changed unexpectedly")
 
@@ -48,6 +48,9 @@ def main():
         'def utilityAnimationTargets(targets=None):',
         'def utilityNamespaceName(name):',
         'def utilityNewShadingNode(nodeType, name=None, **options):',
+        'if jointPathName in uniqueBones:',
+        'uniqueBones[jointDagPath.fullPathName()][7]',
+        'meshNode.SetSkinningMethod(',
         'type=fileTranslatorName',
         "def utilityApplyTranslatorOptions(optionString, supportedNames):",
         'if cmds.about(batch=True):',

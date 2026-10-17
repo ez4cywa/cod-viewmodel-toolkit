@@ -28,6 +28,7 @@ DOCUMENTS = (
     "docs/CAST_BACKEND_BENCHMARK.md", "docs/RELEASE_CHECKLIST.md",
     "docs/RELEASE_NOTES_3.5.1.md",
     "docs/RELEASE_NOTES_3.6.0.md",
+    "docs/RELEASE_NOTES_3.6.1.md",
 )
 VERSION_FILES = (
     "plug-ins/viewmodel_weapon_toolkit.py",

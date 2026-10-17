@@ -2,6 +2,30 @@
 
 All notable changes to this project are documented here.
 
+## [3.6.1] - 2026-10-17
+
+- Remove the default `cast_import:` model namespace from Import CAST and model
+  drops. Preserve original names; append digits only on collisions, including
+  names that already end in digits. Retain explicit namespace API compatibility.
+- Stage each import independently and move only its new nodes by real UUID;
+  keep duplicate skeletons, materials and skin connections independent. Restore
+  the old scene on failed publication without deleting pre-existing nodes.
+- Fix CAST model export merging same-named joints from different DAG branches.
+  Map bone parents and vertex influences by full path, uniquely suffix names in
+  the output file, and preserve linear / dual-quaternion skinning metadata.
+- Reject weighted influences outside the exported skeleton, weighted non-joint
+  influences, unsupported blended skinning and ambiguous animated skeleton names
+  instead of silently exporting incorrect bones or animation targets.
+- Add original-name, numeric-suffix, duplicate-skin independence and complete
+  CAST weight round-trip regressions, including sparse influence indices.
+
+- Treat empty optional Mesh/Hair material references as unassigned instead of
+  raising `IndexError`. Preserve binary serialization and existing valid,
+  missing and unresolved reference behavior in the shared Maya/Blender reader.
+- Add binary round-trip contracts and a Maya regression for default materials,
+  geometry/skin preservation and no-output attachment; record the serializer patch
+  and its exact hash in the third-party notices.
+
 ## [3.6.0] - 2026-10-13
 
 - Add a built-in Import CAST menu and fixed-backend model/animation drops,

@@ -89,7 +89,7 @@ COMMAND_NAME = "viewmodelWeaponToolkit"
 LEGACY_COMMAND_NAME = "attachGun"
 WINDOW_NAME = "ViewmodelWeaponToolkitWindow"
 DUAL_WINDOW_NAME = "ViewmodelWeaponToolkitDualWindow"
-VERSION = "3.6.0"
+VERSION = "3.6.1"
 
 VIEWHANDS_OPTVAR = "attachGun_viewhandsPath"
 OUTPUT_DIR_OPTVAR = "attachGun_outputDir"
@@ -3987,15 +3987,70 @@ def _cast_content_counts(path):
     return {"models": models, "animations": animations, "instances": instances}
 
 
+def _cast_import_root_names(records, existing):
+    """Allocate root names without consuming another source node's exact name."""
+    occupied = set(existing)
+    reserved = occupied | {name for identity, name in records}
+    result = {}
+    for identity, name in records:
+        candidate, index = name, 1
+        if candidate in occupied:
+            candidate = name + str(index)
+            while candidate in reserved or candidate in occupied:
+                index += 1
+                candidate = name + str(index)
+        occupied.add(candidate)
+        result[identity] = candidate
+    return result
+
+
+def _cast_scene_uuids():
+    """Query explicit nodes: Maya can ignore uuid=True with no node arguments."""
+    nodes = cmds.ls(long=True) or []
+    return set(cmds.ls(nodes, uuid=True) or []) if nodes else set()
+
+
+def _publish_cast_models_at_root(created):
+    """Move only this import's nodes, preserving identity and all skin links."""
+    records = sorted((_node_from_uuid(identity), identity) for identity in created)
+    paths = {node: identity for node, identity in records}
+    paired_shapes = {}
+    for node, identity in records:
+        parent = node.rsplit("|", 1)[0]
+        if (parent in paths and _short_name(node) == _short_name(parent)
+                and cmds.objectType(node, isAType="shape")):
+            # Maya permits a transform and its own shape to share a leaf name.
+            # Preserve that relationship instead of inventing a first-import
+            # suffix that would also leak into the next CAST export.
+            paired_shapes[identity] = paths[parent]
+    root_names = {node.rsplit("|", 1)[-1] for node in cmds.ls(long=True) or []
+                  if ":" not in node.rsplit("|", 1)[-1]}
+    plan = _cast_import_root_names(
+        [(identity, _short_name(node)) for node, identity in records
+         if identity not in paired_shapes], root_names)
+    plan.update((identity, plan[parent]) for identity, parent in paired_shapes.items())
+    for unused, identity in records:
+        # A parent's rename invalidates descendant paths, never their UUIDs.
+        # ignoreShape prevents Maya from silently renaming a second planned node.
+        cmds.rename(_node_from_uuid(identity), ":" + plan[identity], ignoreShape=True)
+        actual = _node_from_uuid(identity).rsplit("|", 1)[-1]
+        if actual != plan[identity]:
+            raise RuntimeError("CAST import could not allocate root name %s: %s"
+                               % (plan[identity], actual))
+
+
 def _import_isolated_cast_models(path, namespace=None):
-    """Create only this file's models in a fresh, absolute namespace.
+    """Stage models in isolation, then publish original root names by default.
 
     The upstream translator does not advertise namespace support. Its existing
     model importer is reused directly while creation AND name lookup are scoped
     to our namespace. This also prevents reusing an existing scene's materials.
-    No source document is edited and no alternate parser is involved.
+    The temporary namespace is removed before returning. Name collisions append
+    digits to new nodes only. An explicitly requested namespace remains supported
+    for callers that deliberately need isolation. No source document is edited.
     """
-    base = str(namespace or "cast_import").strip()
+    publish_root = not namespace
+    base = str(namespace or "_cod_cast_staging").strip()
     if not re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", base):
         raise RuntimeError("CAST import namespace must be one simple name")
     candidate, index = base, 1
@@ -4007,7 +4062,7 @@ def _import_isolated_cast_models(path, namespace=None):
     previous_relative = bool(cmds.namespace(query=True, relativeNames=True))
     previous_selection = cmds.ls(selection=True, long=True) or []
     previous_modified = cmds.file(query=True, modified=True)
-    before = set(cmds.ls(uuid=True) or [])
+    before = _cast_scene_uuids()
     module = _castplugin_module()
     document = _cast_backend().read(path)
     created_namespace = False
@@ -4027,19 +4082,28 @@ def _import_isolated_cast_models(path, namespace=None):
         # delta only after switching back to absolute name lookup.
         cmds.namespace(relativeNames=False)
         cmds.namespace(setNamespace=previous_namespace)
-        created = set(cmds.ls(uuid=True) or []) - before
+        created = _cast_scene_uuids() - before
         nodes = sorted(_node_from_uuid(value) for value in created)
         if not nodes or any(_namespace_of(node) != candidate for node in nodes):
             raise RuntimeError("CAST model import did not remain in its isolated namespace")
+        if publish_root:
+            cmds.namespace(setNamespace=":")
+            _publish_cast_models_at_root(created)
+            # Do not merge a namespace: Maya may increment existing numeric
+            # suffixes or rename unrelated scene nodes instead of appending.
+            cmds.namespace(removeNamespace=absolute)
+            nodes = sorted(_node_from_uuid(value) for value in created)
+            if any(_namespace_of(node) for node in nodes):
+                raise RuntimeError("CAST model import left a namespace on new nodes")
         roots = [node for node in nodes if cmds.objectType(node, isAType="dagNode")
                  and not (cmds.listRelatives(node, parent=True, fullPath=True) or [])]
-        return {"kind": "model", "path": path, "namespace": candidate,
+        return {"kind": "model", "path": path, "namespace": "" if publish_root else candidate,
                 "nodes": nodes, "roots": roots, "new_node_count": len(nodes)}
     except Exception as primary:
         errors = []
 
         def delete_created_nodes():
-            created = set(cmds.ls(uuid=True) or []) - before
+            created = _cast_scene_uuids() - before
             nodes = [_node_from_uuid(value) for value in created]
             if nodes:
                 cmds.delete(nodes)
@@ -4268,7 +4332,7 @@ def handle_external_cast_drop(data, do_drop):
 
     if report["kind"] == "model":
         log("built-in CAST drop imported model %s into %s (%d nodes)" % (
-            path, report["namespace"], report["new_node_count"]))
+            path, report["namespace"] or "root", report["new_node_count"]))
     elif report.get("side"):
         log("safe dual CAST drop replaced %s animation (%d curves)" % (
             report["side"], report["anim_curve_count"]))

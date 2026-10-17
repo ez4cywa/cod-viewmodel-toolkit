@@ -45,14 +45,14 @@ flowchart LR
 
 ## Download and install
 
-Current release: **3.6.0**. All four Maya outputs default to off: build an assembly without writing files, then choose formats when needed. **Import CAST...** and built-in drag-and-drop use the private backend without a separate CAST plugin. Standalone FBX/SMD tools export a static model or current animation from an isolated scene copy. Blender behavior is unchanged. [Release notes](docs/RELEASE_NOTES_3.6.0.md).
+Current release: **3.6.1**. Maya model imports keep their original names without a `cast_import:` prefix; collisions receive appended numbers. CAST export keeps distinct same-named DAG bones and their weights separate, and records linear or quaternion skinning. Maya uses the default material for empty material references. Blender receives the shared material-reader fix and version alignment, not the Maya naming or weight-export changes. [Release notes](docs/RELEASE_NOTES_3.6.1.md).
 
 | Host | English ZIP | 简体中文 ZIP | Runtime |
 | --- | --- | --- | --- |
-| Maya | [Download](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/download/3.6.0/cod-viewmodel-toolkit-3.6.0-maya-en.zip) | [下载](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/download/3.6.0/cod-viewmodel-toolkit-3.6.0-maya-zh-CN.zip) | Maya 2027 / Windows is the current verification host; Maya 2025 was verified in prior releases; targets Maya 2022+ in Python 3 mode. |
-| Blender | [Download](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/download/3.6.0/cod-viewmodel-toolkit-3.6.0-blender-en.zip) | [下载](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/download/3.6.0/cod-viewmodel-toolkit-3.6.0-blender-zh-CN.zip) | Requires Blender 5.2+; Windows Blender 5.2.1 LTS is the package verification host. |
+| Maya | [Download](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/download/3.6.1/cod-viewmodel-toolkit-3.6.1-maya-en.zip) | [下载](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/download/3.6.1/cod-viewmodel-toolkit-3.6.1-maya-zh-CN.zip) | Maya 2027 / Windows is the current verification host; Maya 2025 was verified in prior releases; targets Maya 2022+ in Python 3 mode. |
+| Blender | [Download](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/download/3.6.1/cod-viewmodel-toolkit-3.6.1-blender-en.zip) | [下载](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/download/3.6.1/cod-viewmodel-toolkit-3.6.1-blender-zh-CN.zip) | Requires Blender 5.2+; Windows Blender 5.2.1 LTS is the package verification host. |
 
-Download a **platform/language ZIP**, not GitHub's automatically generated “Source code” archive. [SHA-256 checksums](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/download/3.6.0/SHA256SUMS.txt) are included in the release. Python runs inside the selected host; no separate Python installation is needed for normal use.
+Download a **platform/language ZIP**, not GitHub's automatically generated “Source code” archive. [SHA-256 checksums](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/download/3.6.1/SHA256SUMS.txt) are included in the release. Python runs inside the selected host; no separate Python installation is needed for normal use.
 
 ### Maya
 
@@ -87,7 +87,7 @@ Prepare model-only viewhands and weapon CAST files, plus animation-only clips wh
 | Export multiple clips | Use **Single Animation Batch... / Dual Animation Batch...**. | Use **Animation Batch**, then **Start Batch Export**. |
 | Export one file | Use **Export FBX... / Export SMD...**, then choose static/current animation, frame range and units. | Choose the selected assembly's output formats and export. |
 
-Maya's **Import CAST...** adds models to a fresh namespace (`cast_import`, `cast_import1`, etc.) without zeroing bones or attaching them. Animation-only files require a valid single/dual toolkit assembly; the gateway does not guess targets on an ordinary skeleton. Mixed model/animation and instance containers are rejected: supply separate model-only inputs and animation-only clips. With **Built-in CAST Drag and Drop** enabled (default), unsupported, malformed or multi-file CAST drops are rejected without falling back to another importer. Disabling it restores Maya's default drop behavior. Maya's ordinary **File → Import** and an external `Cast` translator are not covered by this gateway. See the [CAST import guide](docs/MAYA.md#import-cast-without-a-separate-plugin).
+Maya's **Import CAST...** and built-in model drops keep source names, without `cast_import:`. If a name is already used, only a number is appended: `j_gun` → `j_gun1`, or `bone7` → `bone71`. Repeated models keep independent bones, materials and skin links; internal temporary isolation leaves no namespace in the scene. Imports do not zero bones or attach them. Explicit Python API `namespace` arguments remain supported. Animation-only files require a valid single/dual toolkit assembly; the gateway does not guess targets on an ordinary skeleton. Mixed model/animation and instance containers are rejected: supply separate model-only inputs and animation-only clips. With **Built-in CAST Drag and Drop** enabled (default), unsupported, malformed or multi-file CAST drops are rejected without falling back to another importer. Disabling it restores Maya's default drop behavior. Maya's ordinary **File → Import** and an external `Cast` translator are not covered by this gateway. See the [CAST import guide](docs/MAYA.md#import-cast-without-a-separate-plugin).
 
 Maya batch jobs start from isolated scenes; save the current scene when prompted. Blender builds a dedicated assembly collection and exports the selected assembly rather than unrelated scene objects. Blender's supported animation workflow uses the toolkit panel; Maya's built-in external-drop behavior is not a shared cross-platform feature.
 
@@ -104,6 +104,8 @@ The table describes **animated export**. Maya builders default to no disk output
 | JSON | Inputs, verification, output paths, warnings and batch results | Inspection report, not a scene or animation format. |
 
 Maya animation exports explicitly set DQS; standalone exports apply it to the worker copy, preserving the live scene. Pure static Maya exports do not force that conversion. Existing files are not overwritten: Maya uses version suffixes such as `_v001`, Blender `_001`. Each enabled format can use its own folder.
+
+For Maya CAST exports, bone identity uses the full DAG path, so same-named bones in different branches do not collapse into one influence. Duplicate names receive numeric suffixes only in the exported file; scene names and weights are not renamed or merged. The exporter writes the current linear or quaternion skinning method instead of silently dropping DQS metadata.
 
 **Units:** default **Keep original**. **Meters (input: ft)** assumes the source distance values are feet and applies `1 ft = 0.3048 m` to output copies. This is not automatic unit detection. Maya FBX may retain centimeter storage metadata while preserving the converted physical size. See [output units](docs/OUTPUT_UNITS.md) before applying another scale conversion.
 
@@ -142,6 +144,8 @@ For contributors; normal installation uses the ZIPs above. Run from the reposito
 git clone https://github.com/ez4cywa/cod-viewmodel-toolkit.git
 cd cod-viewmodel-toolkit
 python tests/verify_vendored_cast.py
+python tests/verify_empty_material_references.py
+python tests/verify_cast_import_names.py
 python tests/verify_vendored_blender_cast.py
 mayapy tests/verify_plugin_identity.py
 mayapy tests/verify_private_cast_backend.py
@@ -149,6 +153,8 @@ mayapy tests/verify_cast_v201.py
 mayapy tests/verify_animation_read_session.py
 mayapy tests/verify_maya_drop_module_path.py
 mayapy tests/verify_cast_import_gateway.py
+mayapy tests/verify_cast_duplicate_names.py
+mayapy tests/verify_skin_weight_roundtrip.py
 mayapy tests/verify_optional_outputs.py
 python tests/verify_standalone_exports.py
 python tests/verify_standalone_export_ui.py
@@ -158,7 +164,7 @@ python scripts/build_release.py ../release-output
 
 `mayapy` is Maya's Python executable; use its full path if it is not on `PATH`. The build command produces **four** platform/language ZIPs and refuses to overwrite existing archives. Source installation details are in the [Maya](docs/MAYA.md#installation) and [Blender](docs/BLENDER.md#install) guides.
 
-GitHub Actions checks source syntax, every Maya runtime file's Python 3.7 syntax, backend integrity, standalone export/UI contracts, release-build failures, localization, package layouts and reproducible archives. It does **not** run Maya or Blender. Host verification is recorded in the [current release notes](docs/RELEASE_NOTES_3.6.0.md) and [release checklist](docs/RELEASE_CHECKLIST.md); prior [backend measurements](docs/CAST_BACKEND_BENCHMARK.md) and [metric output records](docs/VERIFICATION_3.4.0.md) remain available. Maya 2022 compatibility is a syntax/API target, not a full host regression run.
+GitHub Actions checks source syntax, every Maya runtime file's Python 3.7 syntax, backend integrity, standalone export/UI contracts, release-build failures, localization, package layouts and reproducible archives. It does **not** run Maya or Blender. Host verification is recorded in the [current release notes](docs/RELEASE_NOTES_3.6.1.md) and [release checklist](docs/RELEASE_CHECKLIST.md); prior [backend measurements](docs/CAST_BACKEND_BENCHMARK.md) and [metric output records](docs/VERIFICATION_3.4.0.md) remain available. Maya 2022 compatibility is a syntax/API target, not a full host regression run.
 
 ## Project layout
 

@@ -832,7 +832,7 @@ class Mesh(CastNode):
     def Material(self):
         """Gets the material used for this mesh."""
         m = self.properties.get("m")
-        if m is not None:
+        if m is not None and m.values:
             return self.parentNode.ChildByHash(m.values[0])
         return None
 
@@ -891,7 +891,7 @@ class Hair(CastNode):
     def Material(self):
         """Gets the material used for this hair."""
         m = self.properties.get("m")
-        if m is not None:
+        if m is not None and m.values:
             return self.parentNode.ChildByHash(m.values[0])
         return None
 

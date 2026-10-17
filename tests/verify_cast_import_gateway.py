@@ -1,7 +1,8 @@
-"""Mayapy: a private CAST gateway isolates models and safely routes animations."""
+"""Mayapy: a private CAST gateway isolates model graphs with plain public names."""
 
 import argparse
 from pathlib import Path
+import re
 import sys
 import tempfile
 from unittest.mock import patch
@@ -89,7 +90,7 @@ def material_graph():
     } for kind, names in attributes.items() for node in cmds.ls(type=kind) or []}
 
 
-def model_import(runtime, path, prefix="cast_import", explicit=False):
+def model_import(runtime, path, prefix=None, explicit=False):
     before = snapshot()
     old_shaders = shader_links()
     old_graph = material_graph()
@@ -105,11 +106,20 @@ def model_import(runtime, path, prefix="cast_import", explicit=False):
     assert new_nodes, "Model gateway created no model nodes"
     namespaces = {node.rsplit("|", 1)[-1].rsplit(":", 1)[0]
                   for node in new_nodes if ":" in node.rsplit("|", 1)[-1]}
-    assert len(namespaces) == 1 and next(iter(namespaces)).startswith(prefix), namespaces
-    imported_namespace = next(iter(namespaces))
-    assert cmds.namespace(exists=":" + imported_namespace)
-    assert all(node.rsplit("|", 1)[-1].startswith(imported_namespace + ":")
-               for node in new_nodes), sorted(new_nodes)
+    if explicit:
+        assert len(namespaces) == 1 and next(iter(namespaces)).startswith(prefix), namespaces
+        imported_namespace = next(iter(namespaces))
+        assert cmds.namespace(exists=":" + imported_namespace)
+        assert all(node.rsplit("|", 1)[-1].startswith(imported_namespace + ":")
+                   for node in new_nodes), sorted(new_nodes)
+    else:
+        assert not namespaces, namespaces
+        imported_namespace = ""
+        assert report["namespace"] == "", report
+
+    def is_new_node(plug):
+        node = plug.split(".", 1)[0]
+        return (cmds.ls(node, long=True) or [None])[0] in new_nodes
     for field in ("scene", "frame", "units", "up_axis", "playback", "keys"):
         assert before[field] == after[field], (field, before[field], after[field])
     for cluster, method in before["skin_methods"].items():
@@ -122,22 +132,22 @@ def model_import(runtime, path, prefix="cast_import", explicit=False):
     for node, values in old_graph.items():
         assert material_graph()[node] == values, ("Existing material utility was altered", node)
     shader_groups = [node for node in new_nodes if cmds.nodeType(node) == "shadingEngine"]
-    assert shader_groups, "Namespaced model reused an existing shader instead of creating its own"
+    assert shader_groups, "Model reused an existing shader instead of creating its own"
     kinds = {cmds.nodeType(node) for node in new_nodes}
     assert {"standardSurface", "shadingEngine", "file", "place2dTexture", "colorConstant", "reverse", "bump2d"}.issubset(kinds), kinds
     shader = next(node for node in new_nodes if cmds.nodeType(node) == "standardSurface")
     for attribute in ("baseColor", "specularRoughness", "normalCamera", "emissionColor"):
         source = cmds.listConnections(shader + "." + attribute, source=True,
                                       destination=False, plugs=True) or []
-        assert len(source) == 1 and source[0].lstrip(":").startswith(imported_namespace + ":"), (attribute, source)
+        assert len(source) == 1 and is_new_node(source[0]), (attribute, source)
     for node in new_nodes:
         if cmds.nodeType(node) == "file":
-            slot = node.rsplit("_", 1)[-1]
+            slot = re.sub(r"\d+$", "", node.rsplit("_", 1)[-1])
             assert slot in ("albedo", "gloss", "normal"), node
             assert cmds.getAttr(node + ".fileTextureName").replace("\\", "/").endswith("/missing-synthetic/" + slot + ".png")
             placement = cmds.listConnections(node + ".uvCoord", source=True,
                                              destination=False, plugs=True) or []
-            assert len(placement) == 1 and placement[0].lstrip(":").startswith(imported_namespace + ":"), (node, placement)
+            assert len(placement) == 1 and is_new_node(placement[0]), (node, placement)
         elif cmds.nodeType(node) == "colorConstant":
             assert abs(cmds.getAttr(node + ".inAlpha") - 1.0) < 1e-8
         elif cmds.nodeType(node) == "bump2d":
@@ -146,7 +156,7 @@ def model_import(runtime, path, prefix="cast_import", explicit=False):
             shader = cmds.listConnections(node + ".surfaceShader", source=True,
                                           destination=False, plugs=True) or []
             assert len(shader) == 1, ("Imported shader group has no shader", node, shader)
-            assert shader[0].split(".", 1)[0].startswith(imported_namespace + ":"), (node, shader)
+            assert is_new_node(shader[0]), (node, shader)
     assert_private_only(runtime())
     print("CAST_GATEWAY_MODEL_OK", imported_namespace, len(new_nodes), flush=True)
     return imported_namespace
@@ -326,7 +336,7 @@ def run_gateway(namespace, folder):
     after_drop = snapshot()
     assert set(before_drop["nodes"]).issubset(after_drop["nodes"])
     assert before_drop["keys"] == after_drop["keys"]
-    assert len(cmds.namespaceInfo(":", listOnlyNamespaces=True, recurse=True) or []) > namespace_count
+    assert len(cmds.namespaceInfo(":", listOnlyNamespaces=True, recurse=True) or []) == namespace_count
     assert_single_routed(result)
 
     before = snapshot()
@@ -364,7 +374,7 @@ def run_gateway(namespace, folder):
     for path in (mixed, instance):
         assert_rejected(runtime, path)
     assert_private_only(runtime())
-    print("CAST_IMPORT_GATEWAY_OK: isolated model namespaces; single/dual safe animation; unsupported imports reject without mutation; no external CAST", flush=True)
+    print("CAST_IMPORT_GATEWAY_OK: independent plain-name model graphs; explicit namespace compatibility; single/dual safe animation; unsupported imports reject without mutation; no external CAST", flush=True)
 
 
 def run_color_autoload(namespace, folder):
