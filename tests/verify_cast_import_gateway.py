@@ -324,8 +324,25 @@ def run_gateway(namespace, folder):
     result = core.attach_gun(str(hands), str(weapon), core.AttachOptions(force_new_scene=True))
     assert max(abs(value) for value in cmds.getAttr(result.source_node + ".translate")[0]) < 1e-8
     assert cmds.getAttr(result.target_node + ".translate")[0] == (5, 6, 7)
+    long_clip = folder / "long_clip.cast"
+    make_animation(core, long_clip, 12, [
+        ("j_gun", "tx", 0, 20, "absolute"),
+        ("j_slide", "tz", 1, 9, "absolute"),
+        ("j_wrist_le", "tx", -4, -12, "absolute"),
+        ("j_wrist_ri", "tx", 4, 12, "absolute"),
+        ("tag_origin", "tx", 0, 15, "absolute"),
+    ])
+    long_report = runtime().import_cast_file(str(long_clip))
+    assert long_report["playback_range"] == (0.0, 12.0)
+    assert cmds.playbackOptions(query=True, maxTime=True) == 12.0
     report = runtime().import_cast_file(str(clip))
     assert isinstance(report, dict)
+    assert report["playback_range"] == (0.0, 3.0)
+    assert cmds.playbackOptions(query=True, maxTime=True) == 3.0
+    assert cmds.playbackOptions(query=True, animationEndTime=True) == 3.0
+    assert not cmds.listConnections("tag_origin.tx", source=True, destination=False, type="animCurve")
+    assert abs(cmds.getAttr("tag_origin.tx") - 0.0) < 1e-6
+    assert cmds.keyframe("j_slide.tz", query=True, timeChange=True) == [0.0, 3.0]
     assert_single_routed(result)
     model_import(runtime, weapon)
     assert_single_routed(result)
@@ -359,11 +376,22 @@ def run_gateway(namespace, folder):
     assert rejected == core.OpenMayaUI.MExternalDropCallback.kNoMayaDefaultAndNoAccept
     assert_preserved(before, snapshot())
 
-    dual = core.attach_dual_wield(str(hands), str(weapon), str(left), str(right),
+    long_left = folder / "vm_akimbo_l_long.cast"
+    make_animation(core, long_left, 12, [
+        ("j_gun", "tx", 0, 10, "absolute"),
+        ("j_slide", "tz", 1, 9, "absolute"),
+        ("j_wrist_le", "tx", -4, -12, "absolute"),
+        ("j_wrist_le", "ty", 0, 6, "absolute"),
+    ])
+    dual = core.attach_dual_wield(str(hands), str(weapon), str(long_left), str(right),
                                  core.DualWieldOptions(force_new_scene=True))
+    assert cmds.playbackOptions(query=True, maxTime=True) == 12.0
     for path in (left, right):
         report = runtime().import_cast_file(str(path))
         assert isinstance(report, dict)
+    assert cmds.playbackOptions(query=True, maxTime=True) == 3.0
+    assert not cmds.listConnections("j_wrist_le.ty", source=True, destination=False, type="animCurve")
+    assert abs(cmds.getAttr("j_wrist_le.ty") - 0.0) < 1e-6
     core.validate_dual_wield()
     for frame in range(4):
         cmds.currentTime(frame)

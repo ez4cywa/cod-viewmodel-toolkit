@@ -266,7 +266,7 @@ the remaining animation is still imported.
 | Support level | Environment | Status |
 | --- | --- | --- |
 | Minimum expected | Maya 2022, Python 3.7.7, private patched CAST 2.01 | Python 3.7 syntax/API compatibility target; no full Maya 2022 host regression. |
-| Current verification | Maya 2027, Python 3.13.9, private patched CAST 2.01, Windows | See the [3.6.1 verification scope](RELEASE_NOTES_3.6.1.md#验证范围) for current results. The [3.6.0 record](RELEASE_NOTES_3.6.0.md) remains historical evidence, not acceptance of the new naming or skin-export changes. |
+| Current verification | Maya 2027, Python 3.13.9, private patched CAST 2.01, Windows | See the [3.6.2 verification scope](RELEASE_NOTES_3.6.2.md#验证范围) for current results. Prior [3.6.1](RELEASE_NOTES_3.6.1.md) and [3.6.0](RELEASE_NOTES_3.6.0.md) records remain available. |
 | Historical verification | Maya 2025, Python 3.11.4, earlier bundled CAST versions, Windows | Prior releases verified single/dual workflows, localization and exports; not re-tested for 3.5.0. |
 
 Maya 2022 on Windows or Linux can also be launched in Python 2 mode; this
@@ -321,7 +321,7 @@ source entry, installed entry and packaged entry separately; ordinary Maya File
 Import is not gateway coverage. CAST skinning regressions must also compare
 bone identities, complete per-vertex weights and deformation after export and
 reimport, not only mesh counts. See the release notes for actual results.
-See [3.6.1 notes](RELEASE_NOTES_3.6.1.md) and the [release checklist](RELEASE_CHECKLIST.md)
+See [3.6.2 notes](RELEASE_NOTES_3.6.2.md) and the [release checklist](RELEASE_CHECKLIST.md)
 for this release; prior [backend measurements](CAST_BACKEND_BENCHMARK.md) and the
 [3.2.0 verification](VERIFICATION_3.2.0.md) records historical CAST 2.00/native UI checks.
 

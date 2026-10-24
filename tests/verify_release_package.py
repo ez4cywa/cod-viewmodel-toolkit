@@ -56,7 +56,7 @@ def main(package, edition):
                           if edition == "zh-CN" else "viewmodel_weapon_toolkit.py")
     plugin_name = entry.stem
     cmds.loadPlugin(str(entry), quiet=True)
-    assert str(cmds.pluginInfo(plugin_name, query=True, version=True)) == "3.6.1"
+    assert str(cmds.pluginInfo(plugin_name, query=True, version=True)) == "3.6.2"
     assert hasattr(cmds, "viewmodelWeaponToolkit") and hasattr(cmds, "attachGun")
     # GUI and batch share the same private translator and serializer package.
     import sys

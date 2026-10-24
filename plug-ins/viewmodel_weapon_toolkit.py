@@ -89,7 +89,7 @@ COMMAND_NAME = "viewmodelWeaponToolkit"
 LEGACY_COMMAND_NAME = "attachGun"
 WINDOW_NAME = "ViewmodelWeaponToolkitWindow"
 DUAL_WINDOW_NAME = "ViewmodelWeaponToolkitDualWindow"
-VERSION = "3.6.1"
+VERSION = "3.6.2"
 
 VIEWHANDS_OPTVAR = "attachGun_viewhandsPath"
 OUTPUT_DIR_OPTVAR = "attachGun_outputDir"
@@ -1878,21 +1878,23 @@ def _route_dual_animation_names(state, side, selected_hand_names):
 
 
 @contextmanager
-def _temporary_cast_animation_settings(import_at_time=False):
+def _temporary_cast_animation_settings(
+        import_at_time=False, import_reset=False):
     ensure_cast_plugin()
     backend = _cast_backend()
     runtime = {}
     if _units_module().scene_is_metric():
         runtime["retargetScale"] = backend.module.runtimeSettings.get("retargetScale", 1.0) * 30.48
     with backend.options({"importAtTime": bool(import_at_time),
-                          "importReset": False, "importLooping": False}, runtime=runtime):
+                          "importReset": bool(import_reset),
+                          "importLooping": False}, runtime=runtime):
         yield
 
 
-def _cast_animation_import_options(import_at_time=False):
-    """Pin non-destructive animation behavior on the translator call itself."""
-    return "importAtTime=%d;importReset=0;importLooping=0" % int(
-        bool(import_at_time))
+def _cast_animation_import_options(import_at_time=False, import_reset=False):
+    """Pin explicit animation behavior on the translator call itself."""
+    return "importAtTime=%d;importReset=%d;importLooping=0" % (
+        int(bool(import_at_time)), int(bool(import_reset)))
 
 
 def _animation_curves_for_uuids(node_uuids):
@@ -1952,6 +1954,15 @@ def _set_scene_animation_range(content_range):
         loop="once",
     )
     cmds.currentTime(content_range[0], edit=True)
+    for file_format in ("FBX", "SMD"):
+        control = "codViewmodelExport%sFrames" % file_format
+        if cmds.intFieldGrp(control, exists=True):
+            cmds.intFieldGrp(
+                control,
+                edit=True,
+                value1=int(playback_range[0]),
+                value2=int(playback_range[1]),
+            )
     return playback_range
 
 
@@ -3252,12 +3263,50 @@ def _cut_dual_keys(state, side, selected_hand_names, frame_range):
         _node_from_uuid(node_uuid)
         for node_uuid in _dual_routed_uuids(
             state, side, selected_hand_names)]
-    if nodes:
+    if not nodes:
+        return
+    if state.get("animation_mode") == "simultaneous":
+        cmds.cutKey(nodes, clear=True)
+    else:
         cmds.cutKey(
             nodes,
             time=(float(frame_range[0]), float(frame_range[1])),
             clear=True,
         )
+    module = _castplugin_module()
+    for node in nodes:
+        for curve in cmds.listConnections(
+                node, source=True, destination=False, type="animCurve") or []:
+            if not (cmds.keyframe(curve, query=True, keyframeCount=True) or 0):
+                cmds.delete(curve)
+        if cmds.objExists("%s.castRestPosition" % node):
+            dag_path = module.utilityGetDagPath(node)
+            rest_position = module.utilityGetSavedNodeData(dag_path)
+            OpenMaya.MFnTransform(dag_path).set(rest_position)
+
+
+def _rebuild_dual_notetracks(state, preserved_side):
+    module = _castplugin_module()
+    module.utilityClearNotetracks()
+    other_path = state.get("%s_animation_path" % preserved_side, "")
+    if not other_path or not os.path.isfile(other_path):
+        return
+    other_range = tuple(state["%s_clip_range" % preserved_side])
+    other_inventory = _cast_animation_inventory(other_path)
+    other_source_range = tuple(other_inventory["frame_range"])
+    other_offset = float(other_range[0]) - float(other_source_range[0])
+    cast_file = _cast_backend().read(other_path)
+    notifications = []
+    for root in cast_file.Roots():
+        for animation in root.ChildrenOfType(module.Animation):
+            notifications.extend(animation.Notifications())
+    if not notifications:
+        return
+    wanted_fps = module.utilityFramerateToUnit(other_inventory["framerate"])
+    start_frame = OpenMaya.MTime(other_offset, wanted_fps)
+    for track in notifications:
+        module.importNotificationTrackNode(track, wanted_fps, start_frame)
+    module.utilitySyncNotetracks()
 
 
 @_cast_read_session()
@@ -3310,7 +3359,9 @@ def replace_dual_animation(side, animation_path):
                 openChunk=True,
                 chunkName="ViewmodelWeaponToolkitReplaceDualAnimation")
             chunk_open = True
+        other_side = "right" if side == "left" else "left"
         _cut_dual_keys(state, side, selected_hand_names, old_range)
+        _rebuild_dual_notetracks(state, other_side)
         report = _import_dual_animation_side(
             state,
             side,
@@ -3345,7 +3396,6 @@ def replace_dual_animation(side, animation_path):
         state["%s_animation_path" % side] = os.path.normpath(
             os.path.abspath(animation_path))
         state["%s_clip_range" % side] = new_range
-        other_side = "right" if side == "left" else "left"
         other_range = tuple(state["%s_clip_range" % other_side])
         animation_range = _combined_frame_range(new_range, other_range)
         playback_range = _visible_playback_range(animation_range)
@@ -3883,6 +3933,29 @@ def _set_playback_range_from_curves(curves):
     return _set_scene_animation_range((start, end))
 
 
+def _animation_inventory_matches_scene(inventory, source_joint, hand_uuid):
+    hand_node = _node_from_uuid(hand_uuid)
+    blend_shapes = None
+    for record in inventory["curve_records"]:
+        node_name = record["node"]
+        prop = record["property"]
+        if prop == "bs":
+            if blend_shapes is None:
+                blend_shapes = cmds.ls(type="blendShape") or []
+            if any(cmds.objExists("%s.%s" % (deformer, node_name))
+                   for deformer in blend_shapes):
+                return True
+            continue
+        target = hand_node if node_name == source_joint else node_name
+        if not cmds.objExists(target):
+            continue
+        matches = cmds.ls(target, long=True) or []
+        if len(matches) == 1 and cmds.objectType(
+                matches[0], isAType="transform"):
+            return True
+    return False
+
+
 @_cast_read_session()
 def import_animation_file(animation_path,
                           protect_translation=True,
@@ -3899,11 +3972,15 @@ def import_animation_file(animation_path,
         source_joint, source_uuid, target_uuid)
     hand_uuid = _node_uuid(hand_node)
     ensure_cast_plugin()
+    if not _animation_inventory_matches_scene(
+            inventory, source_joint, hand_uuid):
+        raise RuntimeError("Imported animation created no matching keyframes")
     framerate = _set_scene_framerate_from_animation(animation_path)
     log("safely importing animation: %s" % animation_path)
     log("routing %s tracks to %s (UUID %s)" % (
         source_joint, hand_node, hand_uuid))
-    with _temporary_cast_animation_settings(import_at_time=False):
+    with _temporary_cast_animation_settings(
+            import_at_time=False, import_reset=True):
         with _route_viewhands_animation_name(
                 source_uuid, hand_uuid, source_joint):
             new_nodes = cmds.file(
@@ -3913,7 +3990,8 @@ def import_animation_file(animation_path,
                 returnNewNodes=True,
                 ra=True,
                 groupReference=False,
-                options=_cast_animation_import_options(False),
+                options=_cast_animation_import_options(
+                    False, import_reset=True),
             ) or []
 
     if protect_translation:
@@ -3953,6 +4031,7 @@ def import_animation_file(animation_path,
     if _LAST_RESULT and _LAST_RESULT.source_uuid == source_uuid:
         _LAST_RESULT.animation_path = animation_path
         _LAST_RESULT.frame_range = animation_range
+        _LAST_RESULT.framerate = framerate
         _LAST_RESULT.translation_protected = bool(protect_translation)
         _LAST_RESULT.source_node = current["source_node"]
         _LAST_RESULT.target_node = current["target_node"]

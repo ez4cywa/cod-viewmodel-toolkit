@@ -45,14 +45,14 @@ flowchart LR
 
 ## 下载与安装
 
-当前版本 **3.6.1**：Maya 模型导入保留原名，不再添加 `cast_import:`，重名只追加数字；CAST 导出不再合并不同 DAG 分支的同名骨骼，正确保留权重与线性／双四元数蒙皮标记。空材质引用改用默认材质。Blender 本次仅接收共享材质读取修复并对齐版本，不包含 Maya 命名或权重导出改动。详见[更新说明](docs/RELEASE_NOTES_3.6.1.md)。
+当前版本 **3.6.2**：修复 Maya 在导入长动画后再导入短动画时未自动刷新场景而是将两段动画缝合的问题；单持动画导入在校验存在匹配骨骼／变形器轨道后自动清除旧动画曲线与通知轨、按 `castRestPosition` 还原骨骼初始姿态并刷新时间轴与独立导出帧范围；双持单侧替换同步清理空动画曲线、还原无关键帧骨骼并重建 `CastNotetracks`。Blender 本次仅对齐版本号。详见[更新说明](docs/RELEASE_NOTES_3.6.2.md)。
 
 | 平台 | 简体中文 ZIP | English ZIP | 运行环境 |
 | --- | --- | --- | --- |
-| Maya | [下载](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/download/3.6.1/cod-viewmodel-toolkit-3.6.1-maya-zh-CN.zip) | [Download](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/download/3.6.1/cod-viewmodel-toolkit-3.6.1-maya-en.zip) | 当前验证环境为 Windows Maya 2027；旧版已验证 Maya 2025；目标支持 Maya 2022+ 的 Python 3 模式。 |
-| Blender | [下载](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/download/3.6.1/cod-viewmodel-toolkit-3.6.1-blender-zh-CN.zip) | [Download](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/download/3.6.1/cod-viewmodel-toolkit-3.6.1-blender-en.zip) | 要求 Blender 5.2+；安装包验证环境为 Windows Blender 5.2.1 LTS。 |
+| Maya | [下载](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/download/3.6.2/cod-viewmodel-toolkit-3.6.2-maya-zh-CN.zip) | [Download](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/download/3.6.2/cod-viewmodel-toolkit-3.6.2-maya-en.zip) | 当前验证环境为 Windows Maya 2027；旧版已验证 Maya 2025；目标支持 Maya 2022+ 的 Python 3 模式。 |
+| Blender | [下载](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/download/3.6.2/cod-viewmodel-toolkit-3.6.2-blender-zh-CN.zip) | [Download](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/download/3.6.2/cod-viewmodel-toolkit-3.6.2-blender-en.zip) | 要求 Blender 5.2+；安装包验证环境为 Windows Blender 5.2.1 LTS。 |
 
-请选择对应**平台和语言的 ZIP**，不要将 GitHub 自动生成的“Source code”源码包当作安装包。Release 同时提供 [SHA-256 校验文件](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/download/3.6.1/SHA256SUMS.txt)。正常使用由宿主自带 Python 运行，无需另装 Python。
+请选择对应**平台和语言的 ZIP**，不要将 GitHub 自动生成的“Source code”源码包当作安装包。Release 同时提供 [SHA-256 校验文件](https://github.com/ez4cywa/cod-viewmodel-toolkit/releases/download/3.6.2/SHA256SUMS.txt)。正常使用由宿主自带 Python 运行，无需另装 Python。
 
 ### Maya
 
@@ -166,7 +166,7 @@ python scripts/build_release.py ../release-output
 
 `mayapy` 是 Maya 自带的 Python，可用完整路径调用。构建命令生成**四个**平台／语言 ZIP，不覆盖已有压缩包。源码安装方法见 [Maya](docs/MAYA.zh-CN.md#安装)和 [Blender](docs/BLENDER.zh-CN.md) 使用说明。
 
-GitHub Actions 检查源码语法、全部 Maya 运行文件的 Python 3.7 语法、后端完整性、独立导出与界面契约、构建失败清理、中文转换、包内容及构建可重复性，**不运行 Maya 或 Blender**。宿主验证见[本版说明](docs/RELEASE_NOTES_3.6.1.md)和[发布清单](docs/RELEASE_CHECKLIST.md)；此前的[后端测量](docs/CAST_BACKEND_BENCHMARK.md)与[米制输出记录](docs/VERIFICATION_3.4.0.md)仍可查阅。Maya 2022 是语法与 API 兼容性目标，不代表已在该版本执行完整回归。
+GitHub Actions 检查源码语法、全部 Maya 运行文件的 Python 3.7 语法、后端完整性、独立导出与界面契约、构建失败清理、中文转换、包内容及构建可重复性，**不运行 Maya 或 Blender**。宿主验证见[本版说明](docs/RELEASE_NOTES_3.6.2.md)和[发布清单](docs/RELEASE_CHECKLIST.md)；此前的[后端测量](docs/CAST_BACKEND_BENCHMARK.md)与[米制输出记录](docs/VERIFICATION_3.4.0.md)仍可查阅。Maya 2022 是语法与 API 兼容性目标，不代表已在该版本执行完整回归。
 
 ## 项目结构
 

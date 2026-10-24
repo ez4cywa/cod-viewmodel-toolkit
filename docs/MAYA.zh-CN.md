@@ -215,7 +215,7 @@ Python 接口：`batch_export_animations(hands, weapon, animation_paths, options
 | 支持级别 | 环境 | 状态 |
 | --- | --- | --- |
 | 预期最低版本 | Maya 2022、Python 3.7.7、私有补丁版 CAST 2.01 | Python 3.7 语法与 API 兼容性目标；未在 Maya 2022 执行完整宿主回归。 |
-| 当前验证版本 | Maya 2027、Python 3.13.9、私有补丁版 CAST 2.01、Windows | 当前结果见 [3.6.1 验证范围](RELEASE_NOTES_3.6.1.md#验证范围)；[3.6.0 记录](RELEASE_NOTES_3.6.0.md)仅为历史证据，不代表本次命名和蒙皮导出改动已经验收。 |
+| 当前验证版本 | Maya 2027、Python 3.13.9、私有补丁版 CAST 2.01、Windows | 当前结果见 [3.6.2 验证范围](RELEASE_NOTES_3.6.2.md#验证范围)；[3.6.1](RELEASE_NOTES_3.6.1.md) 与 [3.6.0 记录](RELEASE_NOTES_3.6.0.md)保留备查。 |
 | 历史验证版本 | Maya 2025、Python 3.11.4、此前内置 CAST 版本、Windows | 旧版验证过单武器、双持、中文界面和导出；3.5.0 未在此版本重新测试。 |
 
 Windows 或 Linux 版 Maya 2022 也可以用 Python 2 模式启动；本工具包必须在
@@ -262,7 +262,7 @@ CAST 导入入口回归检查原名导入、数字冲突后缀、重复模型与
 命名空间 API 调用单独检查兼容性。源码、已安装入口与包内入口须分别验收，
 普通 Maya“文件 → 导入”不属于入口覆盖。蒙皮回归还须比较导出再导入后的骨骼
 身份、完整逐顶点权重和变形，不能只检查网格数量；实际结果见更新说明。
-本版检查见 [3.6.1 更新说明](RELEASE_NOTES_3.6.1.md)和[发布清单](RELEASE_CHECKLIST.md)；
+本版检查见 [3.6.2 更新说明](RELEASE_NOTES_3.6.2.md)和[发布清单](RELEASE_CHECKLIST.md)；
 此前的[后端测量记录](CAST_BACKEND_BENCHMARK.md)保留。CAST 2.00 与原生界面历史检查见
 [3.2.0 验证记录](VERIFICATION_3.2.0.md)。
 

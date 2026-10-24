@@ -79,6 +79,17 @@ def main():
             assert sorted(cmds.ls(type="joint", long=True)) == before_joints
             accepted_drop(core, clip)
             assert abs(cmds.getAttr("j_slide.tz", time=8) - 7) < 1e-6
+            if args.revision == "current":
+                short_clip = fixture / "short.cast"
+                make_animation(core, short_clip, 3, [("j_slide", "tz", 1, 5, "absolute")])
+                accepted_drop(core, short_clip)
+                assert cmds.playbackOptions(query=True, maxTime=True) == 3.0
+                assert cmds.playbackOptions(query=True, animationEndTime=True) == 3.0
+                assert cmds.keyframe("j_slide.tz", query=True, timeChange=True) == [0.0, 3.0]
+                assert not cmds.listConnections(
+                    "viewhands_j_gun.tx", source=True, destination=False, type="animCurve")
+                assert abs(cmds.getAttr("viewhands_j_gun.tx") - 0.0) < 1e-6
+                assert abs(cmds.getAttr("j_slide.tz", time=3) - 5) < 1e-6
     print("ANIMATION_READ_SESSION_OK")
 
 

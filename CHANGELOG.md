@@ -2,6 +2,21 @@
 
 All notable changes to this project are documented here.
 
+## [3.6.2] - 2026-10-24
+
+- Reset single-weapon animation state (`importReset=True`) when importing a new
+  animation CAST after verifying that at least one track matches the current
+  scene. Importing a shorter clip after a longer clip now clears prior animation
+  curves and notetracks, restores previously animated joints to their saved
+  `castRestPosition`, refreshes the timeline range, and updates open standalone
+  FBX/SMD export frame fields instead of stitching the two animations together.
+- Delete emptied animation curves, restore `castRestPosition` on unkeyed routed
+  joints, and rebuild `CastNotetracks` when replacing one side of a dual-wield
+  scene in-place.
+- Add single-weapon and dual-wield long-to-short animation replacement
+  regressions in `verify_animation_read_session.py` and
+  `verify_cast_import_gateway.py`.
+
 ## [3.6.1] - 2026-10-17
 
 - Remove the default `cast_import:` model namespace from Import CAST and model
